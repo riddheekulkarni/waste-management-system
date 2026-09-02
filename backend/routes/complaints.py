@@ -104,6 +104,10 @@ def get_complaint(ticket_id):
 
 @complaints_bp.route("/<ticket_id>/status", methods=["PATCH"])
 def update_status(ticket_id):
+    # Role guard — only admins may change ticket status
+    if session.get("role") != "admin":
+        return jsonify({"error": "Admin access required to update ticket status."}), 403
+
     if not request.is_json or "status" not in request.json:
         return jsonify({"error": "Provide JSON body: {'status': '...'}"}), 400
 

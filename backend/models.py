@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -14,7 +14,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="citizen")  # "citizen" or "admin"
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     complaints = db.relationship("Complaint", backref="user", lazy=True)
 
@@ -39,7 +39,7 @@ class Complaint(db.Model):
 
     id = db.Column(db.String(8), primary_key=True, default=lambda: str(uuid.uuid4())[:8])
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     image_path = db.Column(db.String(255))
     address = db.Column(db.Text, nullable=True)
     latitude = db.Column(db.Float, nullable=True)

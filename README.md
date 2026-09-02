@@ -63,7 +63,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Then open **http://localhost:5000** in a browser — the Flask server serves
+Then open **http://localhost:5050** in a browser — the Flask server serves
 both the API and the frontend, so nothing else needs to run separately.
 
 The app works immediately with no trained model, using a **mock detector**
