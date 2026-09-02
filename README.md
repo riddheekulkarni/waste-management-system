@@ -5,9 +5,7 @@ detects and localizes waste items, a rule-based engine grades severity and
 routes the complaint to the right municipal department, and both citizens
 and admins can track status through a web app.
 
-Status: **~85% complete**, fully runnable end-to-end today using a mock
-detector (see `future_scope_roadmap.md` for what remains, e.g. training a
-real waste-detection model).
+
 
 ## File Structure
 
