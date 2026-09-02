@@ -1,0 +1,8 @@
+flask
+flask-sqlalchemy
+pillow
+
+# Optional — only needed once a custom-trained YOLOv8 model is available
+# (see future_scope_roadmap.md item #1). The app runs fine in mock-detection
+# mode without this installed.
+ultralytics

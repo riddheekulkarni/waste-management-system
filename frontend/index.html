@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>EcoClean Civic — Smart Waste Reporting & Municipal Management System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="/css/styles.css" />
+  <!-- Chart.js & Leaflet JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body class="theme-dark">
+  <!-- TOP NAVIGATION HEADER -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">🌱</div>
+        <div class="brand-text">
+          <h1>EcoClean <span class="accent-text">Civic</span></h1>
+          <span class="sub-brand">AI-Powered Municipal Waste System</span>
+        </div>
+      </div>
+
+      <nav class="nav-tabs">
+        <button class="tab-btn active" data-tab="report">
+          <span class="icon">📸</span> Report Waste
+        </button>
+        <button class="tab-btn" data-tab="track">
+          <span class="icon">🗺️</span> Track Issues
+        </button>
+        <button class="tab-btn" data-tab="admin" id="admin-tab-btn">
+          <span class="icon">🛡️</span> Admin Portal <span class="lock-tag" id="admin-lock-tag">🔒</span>
+        </button>
+      </nav>
+
+      <div class="user-auth-bar" id="user-auth-bar">
+        <button class="btn btn-outline" id="open-auth-btn">
+          <span class="icon">🔑</span> Sign In / Register
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="app-main">
+
+    <!-- CITIZEN: REPORT WASTE SECTION -->
+    <section id="report" class="tab-panel active">
+      <div class="section-hero">
+        <h2>Report a Waste Issue</h2>
+        <p>Upload a photo of illegal dumping or overflow. Our AI will automatically evaluate severity and dispatch the right municipal department.</p>
+      </div>
+
+      <form id="upload-form" class="glass-card form-card">
+        <!-- STEP 1: PHOTO UPLOAD -->
+        <div class="form-group">
+          <label class="form-label">
+            <span class="step-num">1</span> Upload Waste Photo
+          </label>
+          <div class="dropzone" id="dropzone">
+            <input type="file" id="image-input" accept="image/*" required />
+            <div class="dropzone-content" id="dropzone-content">
+              <div class="dropzone-icon">📷</div>
+              <p class="dropzone-text">Drag & drop your photo here, or <span class="browse-link">browse file</span></p>
+              <span class="dropzone-hint">Supports JPG, PNG, WEBP (Max 16MB)</span>
+            </div>
+            <div class="image-preview-container hidden" id="image-preview-container">
+              <img id="image-preview" src="" alt="Waste Preview" />
+              <button type="button" class="btn-remove-img" id="remove-img-btn">✕ Change Photo</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 2: USER-FRIENDLY LOCATION SELECTION -->
+        <div class="form-group">
+          <label class="form-label">
+            <span class="step-num">2</span> Select Location on Map
+          </label>
+          
+          <div class="location-picker-wrapper">
+            <div class="search-bar-row">
+              <div class="search-input-wrapper">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="address-search-input" placeholder="Search address, landmark, or street..." />
+              </div>
+              <button type="button" class="btn btn-secondary" id="search-address-btn">Search</button>
+              <button type="button" class="btn btn-emerald" id="use-location-btn">
+                <span class="icon">📍</span> Detect My Location
+              </button>
+            </div>
+
+            <!-- Leaflet Interactive Map -->
+            <div id="report-map" class="interactive-map"></div>
+
+            <!-- Address Result Card -->
+            <div class="address-display-box" id="address-display-box">
+              <div class="location-pin-icon">📌</div>
+              <div class="address-details">
+                <span class="address-label">Selected Address:</span>
+                <input type="text" id="address-input" class="address-text-input" placeholder="Click on the map above or detect location..." required readonly />
+              </div>
+            </div>
+
+            <div class="landmark-field">
+              <label for="landmark-input">Landmark / Extra Notes (Optional)</label>
+              <input type="text" id="landmark-input" placeholder="e.g. Near Metro Pillar 142, behind grocery store..." />
+            </div>
+
+            <!-- Hidden lat/lng fields -->
+            <input type="hidden" id="lat-input" />
+            <input type="hidden" id="lng-input" />
+          </div>
+        </div>
+
+        <button type="submit" id="submit-btn" class="btn btn-primary btn-block">
+          🚀 Submit Complaint to Municipal Team
+        </button>
+      </form>
+
+      <!-- SUCCESS / RESULT DISPLAY -->
+      <div id="upload-result" class="glass-card result-card hidden"></div>
+    </section>
+
+    <!-- TRACK COMPLAINTS SECTION -->
+    <section id="track" class="tab-panel">
+      <div class="section-hero flex-hero">
+        <div>
+          <h2>Track Reported Issues</h2>
+          <p>Browse live waste reports, inspect AI severity scores, and follow resolution status.</p>
+        </div>
+        <div class="view-toggle">
+          <button class="toggle-btn active" id="view-cards-btn">🎴 Cards View</button>
+          <button class="toggle-btn" id="view-map-btn">🗺️ Map View</button>
+        </div>
+      </div>
+
+      <!-- FILTER CONTROLS -->
+      <div class="glass-card filter-card">
+        <div class="filter-group">
+          <label>Status</label>
+          <select id="filter-status">
+            <option value="">All Statuses</option>
+            <option value="Open">Open</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Resolved">Resolved</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>Department</label>
+          <select id="filter-department">
+            <option value="">All Departments</option>
+            <option value="Sanitation Department">Sanitation Dept</option>
+            <option value="Recycling Department">Recycling Dept</option>
+            <option value="Health & Hazmat Department">Health & Hazmat</option>
+            <option value="Public Works Department">Public Works</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>Severity</label>
+          <select id="filter-severity">
+            <option value="">All Severities</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+          </select>
+        </div>
+
+        <div class="filter-group checkbox-group" id="my-complaints-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="filter-my-complaints" />
+            <span>Show My Reports Only</span>
+          </label>
+        </div>
+
+        <button class="btn btn-secondary" id="refresh-track-btn">🔄 Refresh</button>
+      </div>
+
+      <!-- CARDS VIEW -->
+      <div id="cards-view-container">
+        <div id="complaint-list" class="cards-grid"></div>
+      </div>
+
+      <!-- MAP VIEW CONTAINER -->
+      <div id="map-view-container" class="hidden">
+        <div class="glass-card map-card">
+          <div id="track-map" class="interactive-map map-lg"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADMIN DASHBOARD SECTION -->
+    <section id="admin" class="tab-panel">
+      <!-- LOCKED OVERLAY FOR NON-ADMINS -->
+      <div id="admin-locked-view" class="glass-card locked-card hidden">
+        <div class="locked-icon">🔒</div>
+        <h2>Municipal Admin Authentication Required</h2>
+        <p>Access to the Admin Operations Center is restricted to authorized municipal officers.</p>
+        <button class="btn btn-primary" id="admin-login-trigger-btn">
+          🔑 Sign In as Admin
+        </button>
+      </div>
+
+      <!-- UNLOCKED ADMIN DASHBOARD -->
+      <div id="admin-unlocked-view">
+        <div class="section-hero">
+          <h2>Municipal Operations Dashboard</h2>
+          <p>Real-time analytics, automated AI dispatch routing, and ticket resolution manager.</p>
+        </div>
+
+        <!-- STATS METRICS ROW -->
+        <div class="stats-grid">
+          <div class="stat-card glass-card">
+            <div class="stat-icon icon-blue">📊</div>
+            <div class="stat-info">
+              <span class="stat-number" id="stat-total">0</span>
+              <label class="stat-label">Total Complaints</label>
+            </div>
+          </div>
+          <div class="stat-card glass-card">
+            <div class="stat-icon icon-amber">⏳</div>
+            <div class="stat-info">
+              <span class="stat-number" id="stat-open">0</span>
+              <label class="stat-label">Pending / Open</label>
+            </div>
+          </div>
+          <div class="stat-card glass-card">
+            <div class="stat-icon icon-green">✅</div>
+            <div class="stat-info">
+              <span class="stat-number" id="stat-resolved">0</span>
+              <label class="stat-label">Resolved Issues</label>
+            </div>
+          </div>
+          <div class="stat-card glass-card">
+            <div class="stat-icon icon-red">🚨</div>
+            <div class="stat-info">
+              <span class="stat-number" id="stat-high">0</span>
+              <label class="stat-label">High Severity Alerts</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHARTS ROW -->
+        <div class="charts-grid">
+          <div class="glass-card chart-card">
+            <h3>Severity Breakdown</h3>
+            <div class="chart-container">
+              <canvas id="severity-chart"></canvas>
+            </div>
+          </div>
+          <div class="glass-card chart-card">
+            <h3>Department Workloads</h3>
+            <div class="chart-container">
+              <canvas id="department-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADMIN INCIDENT MAP -->
+        <div class="glass-card admin-map-card">
+          <h3>Incident Geographic Distribution</h3>
+          <div id="admin-map" class="interactive-map map-md"></div>
+        </div>
+
+        <!-- ADMIN COMPLAINTS TABLE -->
+        <div class="glass-card table-card">
+          <div class="table-header">
+            <h3>All Municipal Tickets</h3>
+            <div class="table-actions">
+              <select id="admin-filter-department" class="select-sm">
+                <option value="">All Departments</option>
+                <option value="Sanitation Department">Sanitation</option>
+                <option value="Recycling Department">Recycling</option>
+                <option value="Health & Hazmat Department">Health & Hazmat</option>
+                <option value="Public Works Department">Public Works</option>
+              </select>
+              <button id="refresh-admin-btn" class="btn btn-sm btn-secondary">🔄 Refresh</button>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table id="admin-table">
+              <thead>
+                <tr>
+                  <th>Ticket</th>
+                  <th>Date</th>
+                  <th>Submitted By</th>
+                  <th>Location</th>
+                  <th>Severity</th>
+                  <th>Department</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- AUTHENTICATION MODAL (CITIZEN & ADMIN LOGIN) -->
+  <div class="modal-overlay hidden" id="auth-modal">
+    <div class="modal-card glass-card">
+      <button class="modal-close" id="close-auth-modal">✕</button>
+
+      <div class="auth-tabs">
+        <button class="auth-tab-btn active" id="auth-tab-citizen">Citizen Portal</button>
+        <button class="auth-tab-btn" id="auth-tab-admin">Admin Portal</button>
+      </div>
+
+      <!-- CITIZEN AUTH FORM -->
+      <div id="auth-form-citizen" class="auth-form-container">
+        <h3 id="citizen-auth-title">Citizen Sign In</h3>
+        <p class="auth-subtitle">Sign in to track your submissions and receive status notifications.</p>
+        
+        <form id="citizen-login-form">
+          <div class="form-group">
+            <label>Username or Email</label>
+            <input type="text" id="citizen-identifier" placeholder="e.g. john_doe or citizen@civic.gov" required />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="citizen-password" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Sign In as Citizen</button>
+        </form>
+
+        <div class="auth-divider"><span>OR</span></div>
+        <button type="button" class="btn btn-outline btn-block" id="demo-citizen-btn">
+          ⚡ Quick Demo Login (Citizen)
+        </button>
+
+        <div class="auth-footer">
+          <span id="citizen-toggle-msg">Need a citizen account? <a href="#" id="toggle-register-btn">Register here</a></span>
+        </div>
+      </div>
+
+      <!-- ADMIN AUTH FORM -->
+      <div id="auth-form-admin" class="auth-form-container hidden">
+        <h3>Municipal Admin Sign In</h3>
+        <p class="auth-subtitle">Access municipal command, dispatch routing, and analytics.</p>
+        
+        <form id="admin-login-form">
+          <div class="form-group">
+            <label>Admin Username / Email</label>
+            <input type="text" id="admin-identifier" placeholder="admin@civic.gov" required />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="admin-password" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn btn-emerald btn-block">Sign In to Admin Portal</button>
+        </form>
+
+        <div class="auth-divider"><span>OR</span></div>
+        <button type="button" class="btn btn-outline btn-block" id="demo-admin-btn">
+          🛡️ Quick Demo Login (Admin)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPLAINT DETAIL INSPECTION MODAL -->
+  <div class="modal-overlay hidden" id="complaint-detail-modal">
+    <div class="modal-card glass-card modal-lg">
+      <button class="modal-close" id="close-detail-modal">✕</button>
+      <div id="detail-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- APP FOOTER -->
+  <footer class="app-footer">
+    <p>© 2026 EcoClean Civic — Smart Waste Management & AI Municipal Dispatching System</p>
+  </footer>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
