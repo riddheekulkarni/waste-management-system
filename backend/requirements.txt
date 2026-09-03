@@ -1,5 +1,6 @@
 flask
 flask-sqlalchemy
+werkzeug
 pillow
 
 # Optional — only needed once a custom-trained YOLOv8 model is available

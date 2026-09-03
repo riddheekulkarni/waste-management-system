@@ -16,8 +16,36 @@ let departmentChart = null;
 const DEFAULT_LAT = 18.5204;
 const DEFAULT_LNG = 73.8567;
 
+// ==========================================
+// 0. TOAST NOTIFICATION SYSTEM
+// ==========================================
+function showToast(message, type = "info", duration = 3500) {
+  let container = document.getElementById("toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toast-container";
+    document.body.appendChild(container);
+  }
+
+  const icons = { success: "✅", error: "❌", info: "ℹ️" };
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `<span class="toast-icon">${icons[type] || "ℹ️"}</span><span>${message}</span>`;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add("toast-hide");
+    toast.addEventListener("animationend", () => toast.remove(), { once: true });
+  }, duration);
+}
+
 // INITIALIZATION
 document.addEventListener("DOMContentLoaded", async () => {
+  // Ensure toast container exists in DOM
+  const toastContainer = document.createElement("div");
+  toastContainer.id = "toast-container";
+  document.body.appendChild(toastContainer);
+
   setupNavigation();
   setupAuth();
   setupReportForm();
@@ -114,6 +142,10 @@ function setupAuth() {
   const toggleBtn = document.getElementById("toggle-register-btn");
   const title = document.getElementById("citizen-auth-title");
   const citizenSubmitBtn = document.querySelector("#citizen-login-form button[type='submit']");
+  const citizenIdentifierLabel = document.getElementById("citizen-identifier-label");
+  const citizenIdentifierInput = document.getElementById("citizen-identifier");
+  const citizenEmailGroup = document.getElementById("citizen-email-group");
+  const citizenEmailInput = document.getElementById("citizen-email");
 
   if (toggleBtn) {
     toggleBtn.addEventListener("click", (e) => {
@@ -123,10 +155,18 @@ function setupAuth() {
         title.textContent = "Citizen Registration";
         citizenSubmitBtn.textContent = "Create Citizen Account";
         toggleBtn.textContent = "Sign in here";
+        citizenIdentifierLabel.textContent = "Username";
+        citizenIdentifierInput.placeholder = "Choose a username, e.g. john_doe";
+        citizenEmailGroup.style.display = "flex";
+        citizenEmailInput.required = true;
       } else {
         title.textContent = "Citizen Sign In";
         citizenSubmitBtn.textContent = "Sign In as Citizen";
         toggleBtn.textContent = "Register here";
+        citizenIdentifierLabel.textContent = "Username or Email";
+        citizenIdentifierInput.placeholder = "e.g. john_doe or citizen@civic.gov";
+        citizenEmailGroup.style.display = "none";
+        citizenEmailInput.required = false;
       }
     });
   }
@@ -138,8 +178,8 @@ function setupAuth() {
     const password = document.getElementById("citizen-password").value;
 
     const endpoint = isRegisterMode ? `${API}/auth/register` : `${API}/auth/login`;
-    const payload = isRegisterMode 
-      ? { username: identifier, email: identifier.includes("@") ? identifier : `${identifier}@civic.com`, password, role: "citizen" }
+    const payload = isRegisterMode
+      ? { username: identifier, email: citizenEmailInput.value.trim(), password, role: "citizen" }
       : { identifier, password, role: "citizen" };
 
     try {
@@ -154,9 +194,9 @@ function setupAuth() {
       currentUser = data.user;
       updateUserAuthUI();
       closeModal("auth-modal");
-      alert(`Welcome, ${currentUser.username}!`);
+      showToast(`Welcome, ${currentUser.username}!`, "success");
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, "error");
     }
   });
 
@@ -177,10 +217,10 @@ function setupAuth() {
       currentUser = data.user;
       updateUserAuthUI();
       closeModal("auth-modal");
-      alert(`Welcome to Municipal Operations Center, ${currentUser.username}!`);
+      showToast(`Welcome to Municipal Operations Center, ${currentUser.username}!`, "success");
       loadAdminDashboard();
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, "error");
     }
   });
 
@@ -206,11 +246,12 @@ async function demoLogin(identifier, password, role) {
     currentUser = data.user;
     updateUserAuthUI();
     closeModal("auth-modal");
+    showToast(`Signed in as ${currentUser.username} (${currentUser.role})`, "success");
     if (role === "admin") {
       switchToTab("admin");
     }
   } catch (err) {
-    alert(`Demo login error: ${err.message}`);
+    showToast(`Demo login error: ${err.message}`, "error");
   }
 }
 
@@ -343,10 +384,10 @@ function setupReportForm() {
         document.getElementById("lat-input").value = lat.toFixed(6);
         document.getElementById("lng-input").value = lng.toFixed(6);
       } else {
-        alert("Location not found. Try clicking directly on the map.");
+        showToast("Location not found. Try clicking directly on the map.", "info");
       }
     } catch (err) {
-      alert("Error searching location.");
+      showToast("Error searching location.", "error");
     } finally {
       searchAddressBtn.textContent = "Search";
     }
@@ -355,7 +396,7 @@ function setupReportForm() {
   // Detect My Location Button
   useLocationBtn.addEventListener("click", () => {
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
+      showToast("Geolocation is not supported by your browser.", "error");
       return;
     }
 
@@ -369,8 +410,8 @@ function setupReportForm() {
         updateLocation(lat, lng, true);
         useLocationBtn.innerHTML = `<span class="icon">📍</span> Detect My Location`;
       },
-      (err) => {
-        alert("Could not retrieve location. Please click on the map.");
+      () => {
+        showToast("Could not retrieve location. Please click on the map.", "info");
         useLocationBtn.innerHTML = `<span class="icon">📍</span> Detect My Location`;
       }
     );
@@ -412,7 +453,7 @@ function setupReportForm() {
     const resultBox = document.getElementById("upload-result");
 
     if (!imageInput.files.length) {
-      alert("Please select a waste photo first.");
+      showToast("Please select a waste photo first.", "info");
       return;
     }
 
@@ -724,14 +765,19 @@ function renderAdminTable(complaints) {
       const ticketId = e.target.dataset.ticket;
       const newStatus = e.target.value;
       try {
-        await fetch(`${API}/complaints/${ticketId}/status`, {
+        const res = await fetch(`${API}/complaints/${ticketId}/status`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: newStatus }),
         });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Update failed");
+        }
+        showToast(`Ticket #${ticketId} updated to "${newStatus}"`, "success");
         loadAdminDashboard();
       } catch (err) {
-        alert("Failed to update status.");
+        showToast(err.message, "error");
       }
     });
   });
@@ -829,7 +875,7 @@ async function openComplaintDetail(ticketId) {
     }, 250);
 
   } catch (err) {
-    alert(err.message);
+    showToast(err.message, "error");
   }
 }
 

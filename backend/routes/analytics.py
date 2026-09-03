@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, session
 from sqlalchemy import func
 
 from models import Complaint, db
@@ -8,6 +8,9 @@ analytics_bp = Blueprint("analytics", __name__, url_prefix="/api/analytics")
 
 @analytics_bp.route("/summary", methods=["GET"])
 def summary():
+    if session.get("role") != "admin":
+        return jsonify({"error": "Admin access required."}), 403
+
     total = Complaint.query.count()
 
     by_severity = dict(

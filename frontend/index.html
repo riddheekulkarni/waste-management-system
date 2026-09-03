@@ -326,8 +326,12 @@
         
         <form id="citizen-login-form">
           <div class="form-group">
-            <label>Username or Email</label>
+            <label id="citizen-identifier-label">Username or Email</label>
             <input type="text" id="citizen-identifier" placeholder="e.g. john_doe or citizen@civic.gov" required />
+          </div>
+          <div class="form-group" id="citizen-email-group" style="display:none;">
+            <label>Email Address</label>
+            <input type="email" id="citizen-email" placeholder="e.g. john@example.com" />
           </div>
           <div class="form-group">
             <label>Password</label>
