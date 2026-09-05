@@ -41,6 +41,8 @@ function showToast(message, type = "info", duration = 3500) {
 
 // INITIALIZATION
 document.addEventListener("DOMContentLoaded", async () => {
+  setupThemePreference();
+
   // Ensure toast container exists in DOM
   const toastContainer = document.createElement("div");
   toastContainer.id = "toast-container";
@@ -56,6 +58,42 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkAuthStatus();
   initReportMap();
 });
+
+// ==========================================
+// 0. THEME PREFERENCE
+// ==========================================
+function setupThemePreference() {
+  const toggle = document.getElementById("theme-toggle");
+  const savedTheme = localStorage.getItem("eco-clean-theme");
+  const theme = savedTheme === "light" ? "light" : "dark";
+
+  applyTheme(theme);
+
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      const nextTheme = document.body.classList.contains("theme-light") ? "dark" : "light";
+      applyTheme(nextTheme);
+      localStorage.setItem("eco-clean-theme", nextTheme);
+    });
+  }
+}
+
+function applyTheme(theme) {
+  const isLight = theme === "light";
+  const toggle = document.getElementById("theme-toggle");
+
+  document.body.classList.toggle("theme-light", isLight);
+  document.body.classList.toggle("theme-dark", !isLight);
+
+  if (toggle) {
+    const label = isLight ? "Dark" : "Light";
+    const action = isLight ? "Switch to dark mode" : "Switch to light mode";
+    toggle.setAttribute("aria-label", action);
+    toggle.setAttribute("title", action);
+    toggle.querySelector(".theme-toggle-icon").textContent = isLight ? "🌙" : "☀️";
+    toggle.querySelector(".theme-toggle-label").textContent = label;
+  }
+}
 
 // ==========================================
 // 1. AUTHENTICATION & ROLE MANAGEMENT
