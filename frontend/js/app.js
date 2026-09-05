@@ -42,6 +42,7 @@ function showToast(message, type = "info", duration = 3500) {
 // INITIALIZATION
 document.addEventListener("DOMContentLoaded", async () => {
   setupThemePreference();
+  setupLandingPage();
 
   // Ensure toast container exists in DOM
   const toastContainer = document.createElement("div");
@@ -58,6 +59,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkAuthStatus();
   initReportMap();
 });
+
+function setupLandingPage() {
+  const reportButton = document.getElementById("report-issue-btn");
+  if (!reportButton) return;
+
+  reportButton.addEventListener("click", () => {
+    document.body.classList.remove("landing-active");
+    document.getElementById("report")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => {
+      if (reportMap) reportMap.invalidateSize();
+    }, 350);
+  });
+}
 
 // ==========================================
 // 0. THEME PREFERENCE

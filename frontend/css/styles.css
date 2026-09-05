@@ -89,6 +89,158 @@ h1, h2, h3, h4 {
 
 .hidden { display: none !important; }
 
+body.landing-active {
+  overflow: hidden;
+}
+
+body:not(.landing-active) .landing-page {
+  display: none;
+}
+
+body.landing-active .app-header,
+body.landing-active .app-main,
+body.landing-active .app-footer {
+  display: none;
+}
+
+.landing-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(280px, 1.05fr);
+  align-items: center;
+  gap: 4rem;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 4rem 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-content {
+  position: relative;
+  z-index: 1;
+  max-width: 600px;
+  animation: landingReveal 0.65s ease both;
+}
+
+.landing-mark {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border-color-glow);
+  border-radius: var(--radius-md);
+  background: var(--accent-emerald-light);
+  font-size: 1.8rem;
+  box-shadow: var(--shadow-glow);
+}
+
+.landing-kicker {
+  color: var(--accent-emerald);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.landing-page h2 {
+  max-width: 660px;
+  margin: 0.65rem 0 1rem;
+  font-size: clamp(2.8rem, 6vw, 5.6rem);
+  line-height: 0.98;
+}
+
+.landing-description {
+  max-width: 530px;
+  color: var(--text-muted);
+  font-size: 1.08rem;
+}
+
+.landing-cta {
+  margin-top: 2rem;
+  padding: 0.9rem 1.35rem;
+}
+
+.landing-trust-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem 1.4rem;
+  margin-top: 2.5rem;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.landing-trust-row span::before {
+  content: "•";
+  color: var(--accent-emerald);
+  margin-right: 0.45rem;
+}
+
+.landing-visual {
+  min-height: 460px;
+  position: relative;
+  border: 1px solid var(--border-color);
+  border-radius: 38% 62% 58% 42% / 44% 38% 62% 56%;
+  background:
+    linear-gradient(145deg, rgba(16, 185, 129, 0.2), transparent 50%),
+    var(--bg-card);
+  box-shadow: var(--shadow-lg);
+  transform: rotate(3deg);
+  animation: visualFloat 8s ease-in-out infinite;
+}
+
+.landing-visual::after {
+  content: "";
+  position: absolute;
+  inset: 13%;
+  border: 1px solid var(--border-color-glow);
+  border-radius: 50%;
+}
+
+.landing-orbit {
+  position: absolute;
+  border: 1px solid var(--border-color-glow);
+  border-radius: 50%;
+}
+
+.landing-orbit-one {
+  width: 58%;
+  height: 58%;
+  top: 21%;
+  left: 21%;
+}
+
+.landing-orbit-two {
+  width: 78%;
+  height: 36%;
+  top: 32%;
+  left: 11%;
+  transform: rotate(-35deg);
+}
+
+.landing-cityline {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 24%;
+  color: var(--accent-emerald);
+  font-size: clamp(1.5rem, 4vw, 3.4rem);
+  letter-spacing: 0.15em;
+  text-align: center;
+}
+
+@keyframes landingReveal {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes visualFloat {
+  0%, 100% { transform: rotate(3deg) translateY(0); }
+  50% { transform: rotate(1deg) translateY(-12px); }
+}
+
 /* ---------- Glassmorphism Component ---------- */
 .glass-card {
   background: var(--bg-card);
@@ -977,6 +1129,13 @@ tbody tr:hover {
 
 /* ---------- Responsive Adjustments ---------- */
 @media (max-width: 768px) {
+  .landing-page {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    padding: 3rem 1.5rem;
+  }
+  .landing-page h2 { font-size: clamp(2.8rem, 14vw, 4.5rem); }
+  .landing-visual { min-height: 260px; max-width: 460px; width: 100%; }
   .header-container { flex-direction: column; align-items: stretch; }
   .nav-tabs { justify-content: center; }
   .header-actions { justify-content: center; }
