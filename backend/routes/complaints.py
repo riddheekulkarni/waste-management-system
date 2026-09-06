@@ -1,10 +1,12 @@
 import os
 import uuid
-
 from flask import Blueprint, current_app, jsonify, request, session
+from werkzeug.utils import secure_filename
 
 from detection import WasteDetector
 from models import Complaint, DetectionItem, db
+from notifications import notify_citizen
+from routes.auth import require_role
 from routing import determine_department
 from severity import compute_severity
 
@@ -21,6 +23,29 @@ def get_detector() -> WasteDetector:
     return _detector
 
 
+def allowed_file(filename: str) -> bool:
+    allowed = current_app.config.get("ALLOWED_EXTENSIONS", {"png", "jpg", "jpeg", "webp"})
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed
+
+
+def find_nearby_duplicate(lat: float, lng: float, radius_meters: float = 50.0):
+    """Find recent open complaint within radius_meters."""
+    if lat is None or lng is None:
+        return None
+
+    open_complaints = Complaint.query.filter(
+        Complaint.status != "Resolved",
+        Complaint.latitude.isnot(None),
+        Complaint.longitude.isnot(None)
+    ).all()
+
+    for c in open_complaints:
+        dist = Complaint.haversine_distance(lat, lng, c.latitude, c.longitude)
+        if dist <= radius_meters:
+            return c
+    return None
+
+
 @complaints_bp.route("/upload", methods=["POST"])
 def upload_complaint():
     if "image" not in request.files:
@@ -30,9 +55,19 @@ def upload_complaint():
     if image_file.filename == "":
         return jsonify({"error": "Empty filename"}), 400
 
-    filename = f"{uuid.uuid4().hex}_{image_file.filename}"
+    if not allowed_file(image_file.filename):
+        return jsonify({"error": "Invalid file type. Allowed formats: PNG, JPG, JPEG, WEBP, GIF."}), 400
+
+    safe_fname = secure_filename(image_file.filename) or "waste_upload.jpg"
+    filename = f"{uuid.uuid4().hex}_{safe_fname}"
     save_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
     image_file.save(save_path)
+
+    detector = get_detector()
+    if not detector.validate_image(save_path):
+        if os.path.exists(save_path):
+            os.remove(save_path)
+        return jsonify({"error": "Uploaded file is not a valid or readable image."}), 400
 
     latitude = request.form.get("latitude", type=float)
     longitude = request.form.get("longitude", type=float)
@@ -40,10 +75,14 @@ def upload_complaint():
 
     user_id = session.get("user_id")
 
-    detector = get_detector()
     detections, image_size = detector.detect(save_path)
     severity = compute_severity(detections, image_size)
     department = determine_department(detections)
+
+    # Duplicate complaint check
+    duplicate_ticket = find_nearby_duplicate(latitude, longitude, radius_meters=50.0)
+    is_duplicate = duplicate_ticket is not None
+    duplicate_of_id = duplicate_ticket.id if duplicate_ticket else None
 
     complaint = Complaint(
         user_id=user_id,
@@ -56,6 +95,8 @@ def upload_complaint():
         item_count=severity["item_count"],
         department=department,
         status="Open",
+        is_duplicate=is_duplicate,
+        duplicate_of_id=duplicate_of_id,
     )
     complaint.id = str(uuid.uuid4())[:8]
 
@@ -68,7 +109,33 @@ def upload_complaint():
     db.session.add(complaint)
     db.session.commit()
 
-    return jsonify(complaint.to_dict()), 201
+    res_data = complaint.to_dict()
+    if is_duplicate:
+        res_data["duplicate_warning"] = (
+            f"Note: An existing complaint (Ticket #{duplicate_of_id}) was reported nearby. "
+            "Your ticket has been linked to prevent redundant municipal dispatches."
+        )
+
+    return jsonify(res_data), 201
+
+
+@complaints_bp.route("/check-duplicate", methods=["POST"])
+def check_duplicate():
+    data = request.get_json() or {}
+    lat = data.get("latitude")
+    lng = data.get("longitude")
+
+    if lat is None or lng is None:
+        return jsonify({"is_duplicate": False, "nearby_ticket": None})
+
+    duplicate = find_nearby_duplicate(float(lat), float(lng), radius_meters=50.0)
+    if duplicate:
+        return jsonify({
+            "is_duplicate": True,
+            "nearby_ticket": duplicate.to_dict(include_detections=False)
+        })
+
+    return jsonify({"is_duplicate": False, "nearby_ticket": None})
 
 
 @complaints_bp.route("", methods=["GET"])
@@ -96,22 +163,19 @@ def list_complaints():
 
 @complaints_bp.route("/<ticket_id>", methods=["GET"])
 def get_complaint(ticket_id):
-    complaint = Complaint.query.get(ticket_id)
+    complaint = db.session.get(Complaint, ticket_id)
     if not complaint:
         return jsonify({"error": "Ticket not found"}), 404
     return jsonify(complaint.to_dict())
 
 
 @complaints_bp.route("/<ticket_id>/status", methods=["PATCH"])
+@require_role("admin")
 def update_status(ticket_id):
-    # Role guard — only admins may change ticket status
-    if session.get("role") != "admin":
-        return jsonify({"error": "Admin access required to update ticket status."}), 403
-
     if not request.is_json or "status" not in request.json:
         return jsonify({"error": "Provide JSON body: {'status': '...'}"}), 400
 
-    complaint = Complaint.query.get(ticket_id)
+    complaint = db.session.get(Complaint, ticket_id)
     if not complaint:
         return jsonify({"error": "Ticket not found"}), 404
 
@@ -121,5 +185,12 @@ def update_status(ticket_id):
 
     complaint.status = new_status
     db.session.commit()
-    return jsonify(complaint.to_dict())
+
+    # Trigger notification
+    notification_result = notify_citizen(complaint.id, new_status)
+    res_dict = complaint.to_dict()
+    res_dict["notification"] = notification_result
+
+    return jsonify(res_dict)
+
 

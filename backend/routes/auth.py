@@ -1,7 +1,30 @@
+from functools import wraps
 from flask import Blueprint, jsonify, request, session
 from models import User, db
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get("user_id"):
+            return jsonify({"error": "Authentication required."}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def require_role(role):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not session.get("user_id"):
+                return jsonify({"error": "Authentication required."}), 401
+            if session.get("role") != role:
+                return jsonify({"error": f"{role.capitalize()} access required."}), 403
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
 
 @auth_bp.route("/register", methods=["POST"])
@@ -71,9 +94,10 @@ def get_current_user():
     if not user_id:
         return jsonify({"user": None})
 
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         session.clear()
         return jsonify({"user": None})
 
     return jsonify({"user": user.to_dict()})
+

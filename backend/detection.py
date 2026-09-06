@@ -45,6 +45,15 @@ class WasteDetector:
         self.mode = mode
         self.model = YOLO(weights_path) if self.mode == "real" else None
 
+    def validate_image(self, image_path: str) -> bool:
+        """Verify if the specified file path contains a valid readable image."""
+        try:
+            with Image.open(image_path) as img:
+                img.verify()
+            return True
+        except Exception:
+            return False
+
     def get_image_size(self, image_path: str) -> Tuple[int, int]:
         try:
             with Image.open(image_path) as img:
