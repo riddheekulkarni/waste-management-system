@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "5050:5050"
+    environment:
+      - SECRET_KEY=production-ecoclean-secret-key
+      - DATABASE_URL=postgresql://ecoclean:ecoclean_pass@db:5432/ecoclean_db
+      - FLASK_ENV=production
+    depends_on:
+      - db
+    restart: always
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=ecoclean
+      - POSTGRES_PASSWORD=ecoclean_pass
+      - POSTGRES_DB=ecoclean_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  postgres_data:
