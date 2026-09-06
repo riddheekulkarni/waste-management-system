@@ -1,3 +1,4 @@
+import math
 import uuid
 from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
@@ -30,7 +31,7 @@ class User(db.Model):
             "username": self.username,
             "email": self.email,
             "role": self.role,
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 
@@ -52,16 +53,31 @@ class Complaint(db.Model):
     department = db.Column(db.String(64))
     status = db.Column(db.String(20), default="Open")  # Open / In Progress / Resolved
 
+    is_duplicate = db.Column(db.Boolean, default=False)
+    duplicate_of_id = db.Column(db.String(8), nullable=True)
+
     detections = db.relationship(
         "DetectionItem", backref="complaint", cascade="all, delete-orphan"
     )
+
+    @staticmethod
+    def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """Calculate great circle distance between two points in meters."""
+        if any(v is None for v in (lat1, lon1, lat2, lon2)):
+            return float("inf")
+        r = 6371000.0  # Earth's radius in meters
+        phi1, phi2 = math.radians(lat1), math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlam = math.radians(lon2 - lon1)
+        a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2.0) ** 2
+        return 2.0 * r * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
 
     def to_dict(self, include_detections=True):
         data = {
             "ticket_id": self.id,
             "user_id": self.user_id,
             "submitted_by": self.user.username if self.user else "Citizen (Guest)",
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
             "image_path": self.image_path,
             "address": self.address or "Location specified on map",
             "latitude": self.latitude,
@@ -73,10 +89,13 @@ class Complaint(db.Model):
             },
             "department": self.department,
             "status": self.status,
+            "is_duplicate": bool(self.is_duplicate),
+            "duplicate_of_id": self.duplicate_of_id,
         }
         if include_detections:
             data["detections"] = [d.to_dict() for d in self.detections]
         return data
+
 
 
 class DetectionItem(db.Model):
