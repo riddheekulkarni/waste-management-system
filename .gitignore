@@ -11,3 +11,14 @@ backend/uploads/*.png
 backend/uploads/*.webp
 backend/waste_management.db
 .env
+
+# Jupyter / Colab notebook checkpoints (auto-generated, not source)
+.ipynb_checkpoints/
+
+# Trained model weights — download from Google Drive, do not commit
+*.pt
+*.onnx
+backend/uploads/*.jpg
+backend/uploads/*.jpeg
+backend/uploads/*.png
+backend/uploads/*.webp
