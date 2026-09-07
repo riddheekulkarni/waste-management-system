@@ -1,3 +1,4 @@
+import logging
 import os
 
 from flask import Flask, send_from_directory
@@ -10,6 +11,7 @@ from routes.complaints import complaints_bp
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 
+logger = logging.getLogger(__name__)
 
 def seed_default_users():
     """Ensure default Admin and Citizen accounts exist for testing."""
@@ -41,6 +43,16 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(complaints_bp)
     app.register_blueprint(analytics_bp)
+
+    # Log which detection mode is active so operators can confirm at startup
+    _weights = app.config.get("WASTE_MODEL_WEIGHTS") or ""
+    if _weights and os.path.exists(_weights):
+        logger.info("🤖 WasteDetector: REAL mode — weights: %s", _weights)
+    else:
+        logger.info(
+            "⚠️  WasteDetector: MOCK mode (no valid WASTE_MODEL_WEIGHTS). "
+            "Set WASTE_MODEL_WEIGHTS=/path/to/best.pt to enable real inference."
+        )
 
     @app.route("/")
     def index():
