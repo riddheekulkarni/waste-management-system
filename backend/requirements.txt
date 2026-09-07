@@ -6,8 +6,7 @@ gunicorn
 pytest
 psycopg2-binary
 
-# Optional — only needed once a custom-trained YOLOv8 model is available
-# (see future_scope_roadmap.md item #1). The app runs fine in mock-detection
-# mode without this installed.
-ultralytics
-
+# YOLOv8 inference — required when WASTE_MODEL_WEIGHTS is set.
+# See train_waste_yolov8.ipynb (project root) to produce best.pt.
+# The app runs in mock-detection mode without a trained model.
+ultralytics>=8.0,<9
