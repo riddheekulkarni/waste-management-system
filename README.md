@@ -95,6 +95,29 @@ Access the production deployment at **http://localhost:5050**.
 
 ---
 
+## Training the Real Detection Model
+
+By default the app runs with a **mock detector** that generates plausible
+synthetic detections — this lets you run and demo the full system without a GPU.
+
+To switch to real YOLOv8 inference:
+
+1. Open **`train_waste_yolov8.ipynb`** in [Google Colab](https://colab.research.google.com)
+2. Set the runtime to **T4 GPU** (`Runtime → Change runtime type`)
+3. Run all cells — the notebook will:
+   - Download the TACO dataset via Roboflow (~30 s)
+   - Remap 60 categories → 9 EcoClean waste classes
+   - Train `yolov8s.pt` for up to 100 epochs (~30–45 min)
+   - Save `best.pt` to your Google Drive
+4. Download `best.pt` from Drive
+5. Set the env var and restart the server:
+   ```bash
+   WASTE_MODEL_WEIGHTS=/path/to/best.pt python app.py
+   ```
+
+The app **auto-switches** to real inference — no code changes needed.
+The startup log will confirm: `🤖 WasteDetector: REAL mode`.
+
 ## Demo Accounts
 
 | Role | Email | Password |
