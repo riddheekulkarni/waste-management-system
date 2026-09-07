@@ -1,145 +1,273 @@
-# EcoClean Civic
-
-EcoClean Civic is an AI-powered municipal civic waste reporting system. Citizens upload
-photos of illegal dumping or overflowing waste, the detection pipeline
-identifies waste items, a rule-based engine grades severity, and the complaint
-is automatically routed to the appropriate municipal department. Citizens can track reports
-on an interactive map, while authenticated admins can review analytics, inspect geospatial distribution, and manage ticket resolution workflows.
-
----
-
-## Key Features & Implementations (Branch: `chaitanya`)
-
-- **AI Waste Detection Pipeline**: Supports real YOLOv8 custom weights or demo-ready mock detector fallback.
-- **Rule-Based Severity & Department Routing**: Calculates waste area coverage and item counts to assign Low / Medium / High severity and route to Sanitation, Recycling, Health & Hazmat, or Public Works.
-- **Geospatial Duplicate Complaint Detection**: Automatically calculates Haversine distance for location-tagged uploads. Issues within 50 meters of existing open reports are flagged and linked to prevent redundant municipal dispatches.
-- **Real-Time Citizen Notification Hook**: Dispatches status update notifications to citizens when tickets transition between Open, In Progress, and Resolved.
-- **Role-Based Access Control (RBAC)**: Secure authentication with citizen self-registration and protected admin portal routes (`@require_role("admin")`).
-- **Geospatial Analytics API**: Provides `/api/analytics/geo` returning location coordinates and severity data for admin incident mapping.
-- **Production-Ready Containerization & Deployment**: Dockerized architecture with `Dockerfile`, `docker-compose.yml` (Flask + Gunicorn + PostgreSQL), `gunicorn.conf.py`, and `.env.example`.
-- **Comprehensive Test Suite**: Automated test suite (`pytest`) covering authentication, detection, severity engine, duplicate detection, and analytics.
-
----
-
-## File Structure
+<div align="center">
 
 ```
-waste-management-system/
-├── backend/
-│   ├── app.py                  # Flask app factory + entry point, serves frontend too
-│   ├── config.py               # App configuration (DB path, upload folder, secrets)
-│   ├── models.py               # SQLAlchemy models (User, Complaint, DetectionItem, distance calc)
-│   ├── detection.py            # Stage 1 — YOLOv8 wrapper (real + mock modes, image validation)
-│   ├── severity.py             # Stage 2a — coverage-ratio severity engine
-│   ├── routing.py              # Stage 2b — waste-class → department mapping
-│   ├── notifications.py        # Citizen notification engine (log, email, SMS hooks)
-│   ├── gunicorn.conf.py        # WSGI production server configuration
-│   ├── Dockerfile              # Container definition for backend service
-│   ├── routes/
-│   │   ├── auth.py             # Register, login, logout, me endpoints & RBAC decorators
-│   │   ├── complaints.py       # /api/complaints/* endpoints & duplicate detection
-│   │   └── analytics.py        # /api/analytics/* summary & geo endpoints
-│   ├── tests/                  # Automated pytest test suite
-│   │   ├── conftest.py
-│   │   ├── test_app.py
-│   │   └── test_engine.py
-│   ├── requirements.txt
-│   ├── uploads/                # Uploaded photos stored here (auto-created)
-│   └── waste_management.db     # SQLite database (auto-created on first run)
-├── frontend/
-│   ├── index.html              # Single-page app: Report / Track / Admin tabs
-│   ├── css/styles.css
-│   └── js/app.js               # Fetch calls to backend API, map & chart rendering
-├── docker-compose.yml          # Docker Compose orchestration (Flask + Postgres)
-├── .env.example                # Environment variables template
-├── future_scope_roadmap.md     # Detailed plan & completed milestones
-└── README.md
+███████╗ ██████╗ ██████╗  ██████╗██╗     ███████╗ █████╗ ███╗   ██╗
+██╔════╝██╔════╝██╔═══██╗██╔════╝██║     ██╔════╝██╔══██╗████╗  ██║
+█████╗  ██║     ██║   ██║██║     ██║     █████╗  ███████║██╔██╗ ██║
+██╔══╝  ██║     ██║   ██║██║     ██║     ██╔══╝  ██╔══██║██║╚██╗██║
+███████╗╚██████╗╚██████╔╝╚██████╗███████╗███████╗██║  ██║██║ ╚████║
+╚══════╝ ╚═════╝ ╚═════╝  ╚═════╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝
+                        ██████╗██╗██╗   ██╗██╗ ██████╗
+                       ██╔════╝██║██║   ██║██║██╔════╝
+                       ██║     ██║██║   ██║██║██║
+                       ██║     ██║╚██╗ ██╔╝██║██║
+                       ╚██████╗██║ ╚████╔╝ ██║╚██████╗
+                        ╚═════╝╚═╝  ╚═══╝  ╚═╝ ╚═════╝
+```
+
+### 🗑️ AI-Powered Municipal Waste Reporting & Routing System
+
+<br/>
+
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Flask](https://img.shields.io/badge/Flask-2.x-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com)
+[![YOLOv8](https://img.shields.io/badge/YOLOv8-Ultralytics-FF5733?style=for-the-badge&logo=yolo&logoColor=white)](https://ultralytics.com)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-PostGIS-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgresql.org)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
+[![pytest](https://img.shields.io/badge/Tests-pytest-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org)
+[![License](https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge)](LICENSE)
+[![Branch](https://img.shields.io/badge/Branch-chaitanya-8B5CF6?style=for-the-badge&logo=git&logoColor=white)](https://github.com/riddheekulkarni/waste-management-system/tree/chaitanya)
+
+<br/>
+
+> **Citizens snap. AI detects. Departments act.** — EcoClean Civic turns a photo of illegal dumping into a routed, tracked, and notified municipal complaint in seconds.
+
+<br/>
+
+---
+
+</div>
+
+## 🧠 How It Works
+
+```
+  📸 Citizen uploads photo
+          │
+          ▼
+  ┌───────────────────┐
+  │  Stage 1: YOLOv8  │  ← Detects waste items + bounding boxes
+  │  Detection Engine │     (9 classes: plastic, glass, hazardous…)
+  └────────┬──────────┘
+           │
+           ▼
+  ┌───────────────────┐
+  │  Stage 2a:        │  ← Coverage ratio + item count
+  │  Severity Engine  │     → Low / Medium / High
+  └────────┬──────────┘
+           │
+           ▼
+  ┌───────────────────┐
+  │  Stage 2b:        │  ← Waste class → Department mapping
+  │  Smart Routing    │     Sanitation / Recycling / Hazmat / Public Works
+  └────────┬──────────┘
+           │
+           ▼
+  ┌───────────────────┐
+  │  Duplicate Check  │  ← Haversine distance ≤ 50m?
+  │  (Geospatial)     │     If yes → link to existing ticket
+  └────────┬──────────┘
+           │
+           ▼
+  ┌───────────────────┐
+  │  Ticket Created   │  ← Stored in DB, citizen gets ticket ID
+  │  + Notification   │     Admin dashboard updates in real time
+  └───────────────────┘
 ```
 
 ---
 
-## Setup & Local Execution
+## ⚡ Feature Matrix
 
-### Local Python Server
+| Feature | Status | Details |
+|---------|:------:|---------|
+| 🤖 YOLOv8 AI Detection | ✅ | Real model OR mock fallback — zero config needed |
+| 📊 Severity Engine | ✅ | Coverage ratio + item count → Low/Medium/High |
+| 🗺️ Smart Department Routing | ✅ | 9 waste classes mapped to 4 departments |
+| 📍 Geospatial Duplicate Detection | ✅ | Haversine 50m radius dedup on every upload |
+| 🔔 Citizen Notifications | ✅ | Status change hooks (log + Twilio/email ready) |
+| 🔐 Auth + RBAC | ✅ | Session auth, `@require_role("admin")` decorator |
+| 📈 Admin Analytics API | ✅ | Summary + geo endpoints for map + chart dashboards |
+| 🐳 Docker Production Stack | ✅ | Flask + Gunicorn + PostgreSQL via Compose |
+| 🧪 Automated Test Suite | ✅ | `pytest` — auth, detection, severity, dedup, analytics |
+| 🏋️ Custom Model Training | 🔄 | Colab notebook ready → run once to get `best.pt` |
+
+---
+
+## 🚀 Quick Start
+
+### Option A — Local Python (30 seconds)
 
 ```bash
-cd backend
+git clone https://github.com/riddheekulkarni/waste-management-system.git
+cd waste-management-system/backend
 pip install -r requirements.txt
 python app.py
 ```
 
-Open **http://localhost:5050** in a browser — Flask serves both the REST API and the frontend single-page app.
+Open → **[http://localhost:5050](http://localhost:5050)**
 
-### Running Tests
+### Option B — Docker (production stack)
+
+```bash
+cp .env.example .env          # configure your secrets
+docker-compose up --build     # Flask + Gunicorn + PostgreSQL
+```
+
+Open → **[http://localhost:5050](http://localhost:5050)**
+
+### Run the Test Suite
 
 ```bash
 cd backend
-pytest tests
+pytest tests -v
 ```
 
 ---
 
-## Docker Production Deployment
+## 🤖 Training the Real AI Model
 
-To run the application using Docker Compose (Flask backend + PostgreSQL database):
+> By default, the app runs with a **mock detector** so you can demo everything instantly — no GPU needed.
+> When you're ready for real inference, follow these steps:
 
-```bash
-# Copy environment variables
-cp .env.example .env
-
-# Build and launch containers
-docker-compose up --build
+```
+Step 1 → Open train_waste_yolov8.ipynb in Google Colab
+Step 2 → Runtime → Change runtime type → T4 GPU
+Step 3 → Run all cells  (~35 min)
+           ├── Downloads TACO dataset via Roboflow
+           ├── Remaps 60 labels → 9 EcoClean classes
+           ├── Fine-tunes yolov8s.pt (100 epochs)
+           └── Saves best.pt to Google Drive
+Step 4 → Download best.pt from Drive to your machine
+Step 5 → Add to .env:
+           WASTE_MODEL_WEIGHTS=/path/to/best.pt
+Step 6 → Restart Flask
+           🤖 WasteDetector: REAL mode ← look for this in logs
 ```
 
-Access the production deployment at **http://localhost:5050**.
+**The backend auto-switches. Zero code changes.**
 
 ---
 
-## Training the Real Detection Model
+## 🗂️ Project Structure
 
-By default the app runs with a **mock detector** that generates plausible
-synthetic detections — this lets you run and demo the full system without a GPU.
-
-To switch to real YOLOv8 inference:
-
-1. Open **`train_waste_yolov8.ipynb`** in [Google Colab](https://colab.research.google.com)
-2. Set the runtime to **T4 GPU** (`Runtime → Change runtime type`)
-3. Run all cells — the notebook will:
-   - Download the TACO dataset via Roboflow (~30 s)
-   - Remap 60 categories → 9 EcoClean waste classes
-   - Train `yolov8s.pt` for up to 100 epochs (~30–45 min)
-   - Save `best.pt` to your Google Drive
-4. Download `best.pt` from Drive
-5. Set the env var and restart the server:
-   ```bash
-   WASTE_MODEL_WEIGHTS=/path/to/best.pt python app.py
-   ```
-
-The app **auto-switches** to real inference — no code changes needed.
-The startup log will confirm: `🤖 WasteDetector: REAL mode`.
-
-## Demo Accounts
-
-| Role | Email | Password |
-|---|---|---|
-| Citizen | `citizen@civic.gov` | `citizen123` |
-| Admin | `admin@civic.gov` | `admin123` |
+```
+waste-management-system/
+│
+├── 🧠 backend/
+│   ├── app.py                  # Flask factory — boots DB, seeds users, logs detector mode
+│   ├── config.py               # All config from env vars
+│   ├── models.py               # User · Complaint · DetectionItem + Haversine distance
+│   ├── detection.py            # YOLOv8 wrapper: real mode ↔ mock fallback
+│   ├── severity.py             # Coverage-ratio severity engine (Low/Medium/High)
+│   ├── routing.py              # Waste class → department mapper
+│   ├── notifications.py        # Notification engine (log + Twilio/email hooks)
+│   ├── gunicorn.conf.py        # Production WSGI config
+│   ├── Dockerfile              # Container image definition
+│   │
+│   ├── routes/
+│   │   ├── auth.py             # /api/auth/* — register, login, logout, me + RBAC
+│   │   ├── complaints.py       # /api/complaints/* — upload, dedup, list, status
+│   │   └── analytics.py        # /api/analytics/* — summary + geo heatmap data
+│   │
+│   └── tests/
+│       ├── conftest.py         # Fixtures: test app, test client, seeded DB
+│       ├── test_app.py         # Auth, upload, status, analytics integration tests
+│       └── test_engine.py      # Unit tests: severity engine, routing, detection
+│
+├── 🎨 frontend/
+│   ├── index.html              # SPA: Report / Track / Admin tabs
+│   ├── css/styles.css          # Full design system
+│   └── js/app.js               # API calls, Leaflet map, Chart.js dashboards
+│
+├── 📓 train_waste_yolov8.ipynb # Colab notebook: TACO → 9-class → best.pt
+├── 🐳 docker-compose.yml       # Flask + Postgres orchestration
+├── 📋 .env.example             # All env vars documented with examples
+└── 📖 future_scope_roadmap.md  # Feature status tracker
+```
 
 ---
 
-## API Reference
+## 🔑 Demo Accounts
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/api/complaints/upload` | Submit a photo (+ optional lat/lng), runs detection, duplicate check & severity pipeline |
-| POST | `/api/complaints/check-duplicate` | Check if an open complaint exists within 50m radius |
-| GET | `/api/complaints` | List complaints (filter by `status`, `department`, `severity`, `my_complaints`) |
-| GET | `/api/complaints/<id>` | Full detail for one ticket, incl. detections |
-| PATCH | `/api/complaints/<id>/status` | Update ticket status (`Open` / `In Progress` / `Resolved`) & notify citizen |
-| GET | `/api/analytics/summary` | Aggregate counts by severity/department/status (Admin only) |
-| GET | `/api/analytics/geo` | Geospatial points with severities and departments (Admin only) |
-| POST | `/api/auth/register` | Register a citizen account |
-| POST | `/api/auth/login` | Sign in with username or email |
-| POST | `/api/auth/logout` | End current session |
-| GET | `/api/auth/me` | Return currently signed-in user |
+| Role | Email | Password | Access |
+|------|-------|----------|--------|
+| 👤 Citizen | `citizen@civic.gov` | `citizen123` | Submit & track own complaints |
+| 🛡️ Admin | `admin@civic.gov` | `admin123` | Full dashboard, analytics, status updates |
 
+---
+
+## 📡 API Reference
+
+### Complaints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|:----:|-------------|
+| `POST` | `/api/complaints/upload` | Optional | Upload photo → detect → severity → route → store |
+| `POST` | `/api/complaints/check-duplicate` | — | Check 50m radius for existing open ticket |
+| `GET` | `/api/complaints` | Optional | List all (filter: `status`, `department`, `severity`, `my_complaints`) |
+| `GET` | `/api/complaints/<id>` | — | Full ticket detail including detections |
+| `PATCH` | `/api/complaints/<id>/status` | 🛡️ Admin | Update status + fire citizen notification |
+
+### Analytics
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|:----:|-------------|
+| `GET` | `/api/analytics/summary` | 🛡️ Admin | Counts by severity / department / status |
+| `GET` | `/api/analytics/geo` | 🛡️ Admin | Geo points + severity for map heatmap |
+
+### Auth
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|:----:|-------------|
+| `POST` | `/api/auth/register` | — | Register new citizen account |
+| `POST` | `/api/auth/login` | — | Sign in (username or email) |
+| `POST` | `/api/auth/logout` | — | End session |
+| `GET` | `/api/auth/me` | ✅ | Return current user |
+
+---
+
+## 🗺️ Roadmap
+
+```
+✅ Completed          🔄 In Progress          ⏳ Future
+```
+
+| # | Feature | Status |
+|---|---------|:------:|
+| 1 | Custom YOLOv8 model training (TACO dataset) | 🔄 Notebook ready — needs GPU run |
+| 2 | Native mobile app (React Native / Flutter) | ⏳ |
+| 3 | Real-time citizen notifications | ✅ |
+| 4 | Authentication & Role-Based Access Control | ✅ |
+| 5 | Production database & Docker deployment | ✅ |
+| 6 | Admin geospatial map + analytics | ✅ |
+| 7 | Duplicate complaint detection (Haversine) | ✅ |
+| 8 | Continuous learning / model feedback loop | ⏳ |
+
+---
+
+## 🛠️ Tech Stack
+
+<div align="center">
+
+| Layer | Technology |
+|-------|-----------|
+| **Backend** | Python 3.10 · Flask · SQLAlchemy |
+| **AI / ML** | YOLOv8 (Ultralytics) · TACO Dataset · Roboflow |
+| **Database** | SQLite (dev) · PostgreSQL + PostGIS (prod) |
+| **Auth** | Werkzeug password hashing · Flask sessions · RBAC |
+| **Geospatial** | Haversine distance · Leaflet.js |
+| **Production** | Docker · Gunicorn · Docker Compose |
+| **Testing** | pytest · Flask test client |
+| **Frontend** | Vanilla HTML/CSS/JS · Chart.js · Leaflet |
+
+</div>
+
+---
+
+<div align="center">
+
+**Built with 🌱 to make cities cleaner.**
+
+*EcoClean Civic — Branch `chaitanya`*
+
+</div>
