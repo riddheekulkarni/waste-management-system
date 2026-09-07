@@ -45,6 +45,17 @@ class WasteDetector:
         self.mode = mode
         self.model = YOLO(weights_path) if self.mode == "real" else None
 
+    @classmethod
+    def load_from_env(cls) -> "WasteDetector":
+        """Construct a WasteDetector from the WASTE_MODEL_WEIGHTS env variable.
+
+        If the variable is unset or the path does not exist the detector falls
+        back to mock mode automatically — no extra handling needed at call sites.
+        """
+        weights = os.environ.get("WASTE_MODEL_WEIGHTS") or None
+        instance = cls(weights_path=weights)
+        return instance
+
     def validate_image(self, image_path: str) -> bool:
         """Verify if the specified file path contains a valid readable image."""
         try:
