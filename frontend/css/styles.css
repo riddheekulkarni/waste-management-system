@@ -1201,3 +1201,205 @@ tbody tr:hover {
   from { opacity: 1; transform: translateX(0); }
   to   { opacity: 0; transform: translateX(40px); }
 }
+
+/* ---------- Cleaner UI Refinements ---------- */
+body {
+  letter-spacing: -0.01em;
+}
+
+.app-header {
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+}
+
+.header-container {
+  max-width: 1240px;
+}
+
+.nav-tabs {
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.tab-btn {
+  padding: 0.6rem 0.95rem;
+  font-size: 0.82rem;
+}
+
+.tab-btn.active {
+  box-shadow: 0 8px 18px rgba(16, 185, 129, 0.22);
+}
+
+.glass-card {
+  border-radius: 22px;
+  padding: 1.2rem 1.3rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+}
+
+.section-hero {
+  margin-bottom: 1.35rem;
+}
+
+.section-hero h2 {
+  font-size: 1.6rem;
+}
+
+.form-card {
+  gap: 1.25rem;
+}
+
+.form-label {
+  font-size: 0.98rem;
+}
+
+.dropzone {
+  border-radius: 18px;
+  padding: 1.5rem 1rem;
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02));
+}
+
+.search-bar-row {
+  align-items: center;
+}
+
+.search-input-wrapper {
+  min-width: 220px;
+}
+
+input[type="text"], input[type="password"], select {
+  border-radius: 12px;
+  padding-top: 0.72rem;
+  padding-bottom: 0.72rem;
+}
+
+.interactive-map {
+  border-radius: 18px;
+}
+
+.address-display-box {
+  border-radius: 16px;
+  padding: 0.75rem 0.9rem;
+}
+
+.result-card {
+  border-radius: 18px;
+  padding: 1rem 1.15rem;
+}
+
+.filter-card {
+  border-radius: 18px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1.2rem;
+}
+
+.filter-group {
+  min-width: 150px;
+}
+
+.view-toggle {
+  border-radius: 12px;
+}
+
+.toggle-btn {
+  border-radius: 10px;
+}
+
+.cards-grid {
+  gap: 1rem;
+}
+
+.complaint-card {
+  border-radius: 20px;
+  padding: 1rem;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+}
+
+.card-img-thumb {
+  border-radius: 14px;
+}
+
+.card-body-info {
+  gap: 0.25rem;
+}
+
+.card-footer-row {
+  padding-top: 0.7rem;
+}
+
+.stats-grid {
+  gap: 1rem;
+}
+
+.stat-card {
+  border-radius: 20px;
+}
+
+.charts-grid {
+  gap: 1rem;
+}
+
+.chart-card, .table-card, .map-card, .admin-map-card {
+  border-radius: 20px;
+}
+
+.table-card {
+  padding: 1rem;
+}
+
+.modal-card {
+  border-radius: 24px;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.auth-tab-btn {
+  border-radius: 12px 12px 0 0;
+}
+
+@media (max-width: 768px) {
+  .app-main {
+    padding-top: 1.5rem;
+  }
+
+  .header-container {
+    gap: 0.8rem;
+  }
+
+  .nav-tabs {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .tab-btn {
+    flex: 1 1 calc(50% - 0.5rem);
+    justify-content: center;
+  }
+
+  .search-bar-row {
+    flex-direction: column;
+  }
+
+  .search-input-wrapper,
+  .search-bar-row .btn,
+  .search-bar-row .btn-emerald {
+    width: 100%;
+  }
+}
+
+body.theme-light .glass-card {
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+body.theme-light .complaint-card {
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+body.theme-light .nav-tabs {
+  background: rgba(148, 163, 184, 0.06);
+}
+
+body.theme-light .dropzone {
+  background: linear-gradient(180deg, rgba(15,23,42,0.01), rgba(15,23,42,0.02));
+}
+
+body.theme-light .toast {
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
+}
