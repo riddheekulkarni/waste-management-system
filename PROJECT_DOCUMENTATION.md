@@ -126,6 +126,34 @@ The project aims to help municipalities:
 - YOLOv8 via ultralytics
 - Optional mock detector fallback for environments without trained weights
 
+### AI Model Used in This Project
+
+This project is designed to train and use a custom YOLOv8 object detection model for waste detection.
+
+- Model family: YOLOv8
+- Training notebook: [train_waste_yolov8.ipynb](train_waste_yolov8.ipynb)
+- Output model file: `best.pt`
+- Runtime loading code: [backend/detection.py](backend/detection.py)
+- Environment variable for real model: `WASTE_MODEL_WEIGHTS`
+
+When the app starts, it checks whether `WASTE_MODEL_WEIGHTS` points to a valid model file. If yes, it loads the real YOLOv8 model. If not, it automatically switches to the mock detector so the app can still run for demos and development.
+
+### Dataset Used for Training
+
+The real model is trained on the TACO dataset, which stands for Trash Annotations in Context.
+
+- Dataset source: public TACO dataset on Roboflow
+- Training notebook: [train_waste_yolov8.ipynb](train_waste_yolov8.ipynb)
+- Purpose: object detection of waste and litter in real-world environments
+
+The notebook downloads the TACO dataset from Roboflow, then remaps the original 60 TACO categories into 9 EcoClean classes used by this project. Those remapped classes are the labels the trained YOLOv8 model learns to detect.
+
+This means the project uses:
+
+- TACO as the base dataset
+- custom EcoClean label mapping for this application
+- YOLOv8 for training and inference
+
 ### Database
 
 - SQLite by default
