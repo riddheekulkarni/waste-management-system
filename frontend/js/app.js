@@ -533,6 +533,8 @@ function setupReportForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
 
+      const submittedAt = data.created_at ? new Date(data.created_at).toLocaleString() : "Just now";
+
       resultBox.className = "glass-card result-card success";
       resultBox.innerHTML = `
         <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
@@ -543,6 +545,7 @@ function setupReportForm() {
           </div>
         </div>
         <p style="font-size: 0.9rem; margin-top: 0.5rem;">
+          🕒 <strong>Reported at:</strong> ${submittedAt}<br/>
           📍 <strong>Location:</strong> ${data.address}<br/>
           📊 <strong>AI Severity Assessment:</strong> <span class="badge badge-${data.severity.level.toLowerCase()}">${data.severity.level} Severity</span> (${data.severity.item_count} items detected)
         </p>
