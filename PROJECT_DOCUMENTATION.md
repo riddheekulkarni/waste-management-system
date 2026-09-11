@@ -4,6 +4,81 @@
 
 EcoClean Civic is an AI-powered municipal waste reporting system. Citizens can upload photos of illegal dumping, overflowing bins, or other waste issues. The system automatically detects waste items, computes severity, routes complaints to the appropriate department, and lets admins track, analyze, and resolve reports.
 
+## Technical Architecture
+
+EcoClean Civic is built as a simple three-layer application:
+
+### 1. Frontend Layer
+
+The frontend is a single-page web application that runs in the browser. It provides the screens for:
+
+- reporting a waste issue
+- viewing complaints and tracking status
+- accessing the admin dashboard
+- signing in or registering as a citizen or admin
+
+It uses HTML, CSS, JavaScript, Leaflet maps, and Chart.js for visualization.
+
+### 2. Backend Layer
+
+The backend is a Flask application that handles all business logic and API requests. It is responsible for:
+
+- validating uploads
+- storing complaint data
+- running the detection pipeline
+- calculating severity
+- routing complaints to departments
+- checking duplicates
+- managing authentication and authorization
+- generating analytics output
+
+### 3. Data Layer
+
+The application stores structured data in a database and stores uploaded images in the local uploads folder.
+
+- Default database: SQLite
+- Docker database: PostgreSQL
+- Image storage: local uploads folder
+
+### Simple System Flow
+
+```mermaid
+flowchart TD
+    A[Citizen uploads photo on website] --> B[Frontend UI]
+    B --> C[Flask API]
+    C --> D[Image validation]
+    D --> E[Waste detection engine]
+    E --> F[Severity calculation]
+    F --> G[Department routing]
+    G --> H[Duplicate check]
+    H --> I[Database storage]
+    I --> J[Admin dashboard / complaint tracker]
+    I --> K[Citizen notifications]
+```
+
+### Easy-to-Understand Explanation
+
+Think of the system as a smart waste reporting assistant:
+
+- The website is the place where people report a problem.
+- The backend is the brain that decides what to do with the report.
+- The AI part looks at the photo and identifies the type of waste.
+- The rules engine decides how serious the issue is.
+- The system then sends the complaint to the correct department and stores it for tracking.
+
+### Main Components and Their Roles
+
+| Component | Role |
+|---|---|
+| Frontend | Lets users upload photos, view maps, and use the dashboard |
+| Flask API | Receives requests, validates inputs, performs logic |
+| Detection Module | Detects waste in uploaded images |
+| Severity Engine | Calculates Low / Medium / High severity |
+| Routing Module | Sends the complaint to the correct department |
+| Database | Saves complaint records and user data |
+| Analytics Module | Provides summary and geolocation insights |
+| Notifications | Sends updates when complaint status changes |
+
 ## Project Goal
 
 The project aims to help municipalities:
