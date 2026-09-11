@@ -1,5 +1,6 @@
 import logging
 import os
+import sqlite3
 
 from flask import Flask, send_from_directory
 
@@ -12,6 +13,33 @@ from routes.complaints import complaints_bp
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 
 logger = logging.getLogger(__name__)
+
+
+def ensure_sqlite_schema(app):
+    """Upgrade existing SQLite databases with newly added complaint columns."""
+    bind = db.session.get_bind()
+    if bind is None or not str(bind.url).startswith("sqlite"):
+        return
+
+    db_path = bind.url.database
+    if not db_path or not os.path.exists(db_path):
+        return
+
+    try:
+        conn = sqlite3.connect(db_path)
+        columns = [row[1] for row in conn.execute("PRAGMA table_info(complaints)")]
+
+        if "is_duplicate" not in columns:
+            conn.execute("ALTER TABLE complaints ADD COLUMN is_duplicate BOOLEAN DEFAULT 0")
+        if "duplicate_of_id" not in columns:
+            conn.execute("ALTER TABLE complaints ADD COLUMN duplicate_of_id VARCHAR(8)")
+
+        conn.commit()
+    except sqlite3.Error as exc:
+        logger.warning("Schema migration skipped for SQLite database %s: %s", db_path, exc)
+    finally:
+        conn.close()
+
 
 def seed_default_users():
     """Ensure default Admin and Citizen accounts exist for testing."""
@@ -38,6 +66,7 @@ def create_app():
     db.init_app(app)
     with app.app_context():
         db.create_all()
+        ensure_sqlite_schema(app)
         seed_default_users()
 
     app.register_blueprint(auth_bp)
