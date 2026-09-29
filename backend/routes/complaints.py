@@ -186,8 +186,9 @@ def update_status(ticket_id):
     complaint.status = new_status
     db.session.commit()
 
-    # Trigger notification
-    notification_result = notify_citizen(complaint.id, new_status)
+    # Resolve the citizen's email so the notification engine can deliver to them.
+    recipient_email = complaint.user.email if complaint.user else None
+    notification_result = notify_citizen(complaint.id, new_status, recipient_email=recipient_email)
     res_dict = complaint.to_dict()
     res_dict["notification"] = notification_result
 
