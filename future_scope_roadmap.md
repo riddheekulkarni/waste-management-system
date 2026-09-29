@@ -5,6 +5,21 @@ what is **in progress**, and what remains for the future.
 
 ---
 
+## ✅ Production-Hardening Tasks — **COMPLETED** (2026-09-29)
+
+| # | Task | Commit |
+|---|------|--------|
+| 1 | `conftest.py` — inject test DB before app factory, add `admin_client`/`citizen_client` fixtures | `002d66e` |
+| 2 | Notifications — full SMTP/SendGrid/log engine, honest `delivered=False`, citizen email from DB | `f476956` |
+| 3 | Config — session cookie flags, `pool_recycle`, `pool_pre_ping`, configurable `MAX_UPLOAD_MB` | `ede0556` |
+| 4 | Rate limiting — `flask-limiter` via `extensions.py`; 10/hr on `/upload`, 30/min on `/check-duplicate` | `1658dc7` |
+| 5 | Docker — env-var substitution for all secrets, db healthcheck, `complaint_uploads` volume | `80e7726` |
+| 6 | Docker model weights — `MODEL_WEIGHTS_DIR` volume mount for `best.pt` | `80e7726` |
+| 7 | Notify citizen — resolved email from `complaint.user.email`, tested end-to-end | `db00c7d` |
+| 8 | `.env` — created from `.env.example` with safe dev defaults (gitignored) | local |
+
+---
+
 ## ✅ 3. Real-Time Citizen Notifications — **IMPLEMENTED**
 
 **Implemented in:** `backend/notifications.py`, called from `routes/complaints.py`
