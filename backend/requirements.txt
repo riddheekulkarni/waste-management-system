@@ -1,5 +1,6 @@
 flask
 flask-sqlalchemy
+flask-limiter>=3.5,<4
 werkzeug
 pillow
 gunicorn

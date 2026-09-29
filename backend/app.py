@@ -5,6 +5,7 @@ import sqlite3
 from flask import Flask, send_from_directory
 
 from config import Config
+from extensions import limiter
 from models import User, db
 from routes.analytics import analytics_bp
 from routes.auth import auth_bp
@@ -69,6 +70,15 @@ def create_app():
         ensure_sqlite_schema(app)
         seed_default_users()
 
+    # ── Rate Limiter ───────────────────────────────────────────────────────
+    # Reads RATELIMIT_ENABLED, RATELIMIT_DEFAULT, RATELIMIT_STORAGE_URL from
+    # app.config (set in Config class).  In tests RATELIMIT_ENABLED=False so
+    # the limiter is a transparent no-op.
+    limiter.enabled = app.config.get("RATELIMIT_ENABLED", True)
+    limiter.storage_uri = app.config.get("RATELIMIT_STORAGE_URL", "memory://")
+    limiter.default_limits = [app.config.get("RATELIMIT_DEFAULT", "200 per day;50 per hour")]
+    limiter.init_app(app)
+
     app.register_blueprint(auth_bp)
     app.register_blueprint(complaints_bp)
     app.register_blueprint(analytics_bp)
@@ -97,4 +107,3 @@ def create_app():
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True, host="0.0.0.0", port=5050)
-

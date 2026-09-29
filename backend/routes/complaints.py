@@ -3,6 +3,7 @@ import uuid
 from flask import Blueprint, current_app, jsonify, request, session
 from werkzeug.utils import secure_filename
 
+from extensions import limiter
 from detection import WasteDetector
 from models import Complaint, DetectionItem, db
 from notifications import notify_citizen
@@ -47,6 +48,7 @@ def find_nearby_duplicate(lat: float, lng: float, radius_meters: float = 50.0):
 
 
 @complaints_bp.route("/upload", methods=["POST"])
+@limiter.limit("10 per hour", error_message="Upload rate limit exceeded. Maximum 10 uploads per hour per IP.")
 def upload_complaint():
     if "image" not in request.files:
         return jsonify({"error": "No image file provided (field name 'image')"}), 400
@@ -120,6 +122,7 @@ def upload_complaint():
 
 
 @complaints_bp.route("/check-duplicate", methods=["POST"])
+@limiter.limit("30 per minute", error_message="Too many duplicate checks. Please slow down.")
 def check_duplicate():
     data = request.get_json() or {}
     lat = data.get("latitude")
