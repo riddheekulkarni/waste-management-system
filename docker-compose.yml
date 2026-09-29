@@ -1,31 +1,63 @@
 version: '3.8'
 
+# ── Variable substitution ─────────────────────────────────────────────────────
+# All secrets are read from a .env file (or the host environment).
+# Copy .env.example → .env and fill in your values before running:
+#   docker-compose up --build
+# ─────────────────────────────────────────────────────────────────────────────
+
 services:
   web:
     build:
       context: .
       dockerfile: backend/Dockerfile
     ports:
-      - "5050:5050"
+      - "${PORT:-5050}:5050"
     environment:
-      - SECRET_KEY=production-ecoclean-secret-key
-      - DATABASE_URL=postgresql://ecoclean:ecoclean_pass@db:5432/ecoclean_db
-      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - WASTE_MODEL_WEIGHTS=${WASTE_MODEL_WEIGHTS:-}
+      # Notification backend
+      - NOTIFY_BACKEND=${NOTIFY_BACKEND:-log}
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
+      # Rate limiter
+      - RATELIMIT_ENABLED=${RATELIMIT_ENABLED:-true}
+      - RATELIMIT_STORAGE_URL=${RATELIMIT_STORAGE_URL:-memory://}
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-16}
+    volumes:
+      # Mount the trained model weights file into the container when available.
+      # Point WASTE_MODEL_WEIGHTS at /models/best.pt in your .env file.
+      - ${MODEL_WEIGHTS_DIR:-./models}:/models:ro
+      # Persist uploaded complaint images across container restarts.
+      - complaint_uploads:/app/backend/uploads
     depends_on:
-      - db
-    restart: always
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
   db:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=ecoclean
-      - POSTGRES_PASSWORD=ecoclean_pass
-      - POSTGRES_DB=ecoclean_db
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  complaint_uploads:
