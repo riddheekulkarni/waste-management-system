@@ -69,6 +69,12 @@ class Complaint(db.Model):
     model_version = db.Column(db.String(32), nullable=True)
     retry_count = db.Column(db.Integer, default=0, nullable=False)
 
+    # ── Phase 8 Field Resolution Metadata ────────────────────────────────────
+    resolution_note = db.Column(db.Text, nullable=True)
+    resolution_image_path = db.Column(db.String(255), nullable=True)
+    resolution_submitted_at = db.Column(db.DateTime, nullable=True)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+
     __table_args__ = (
         db.Index("idx_complaints_lat_lng", "latitude", "longitude"),
         db.Index("idx_complaints_proc_status", "processing_status"),
@@ -76,6 +82,9 @@ class Complaint(db.Model):
 
     detections = db.relationship(
         "DetectionItem", backref="complaint", cascade="all, delete-orphan"
+    )
+    feedback = db.relationship(
+        "CitizenFeedback", backref="complaint", cascade="all, delete-orphan", order_by="CitizenFeedback.created_at.desc()"
     )
 
     @staticmethod
@@ -131,6 +140,28 @@ class Complaint(db.Model):
         annotated_path = os.path.join(os.path.dirname(__file__), "uploads", annotated_name)
         data["annotated_image_path"] = annotated_name if os.path.exists(annotated_path) else None
 
+        # Phase 8 field resolution and feedback metadata
+        has_resolution = bool(
+            self.resolution_note
+            or self.resolution_image_path
+            or self.resolution_submitted_at
+            or self.resolved_at
+            or self.status in ("RESOLUTION_SUBMITTED", "RESOLVED")
+        )
+        if has_resolution:
+            data["resolution"] = {
+                "note": self.resolution_note,
+                "image_path": self.resolution_image_path,
+                "submitted_at": self.resolution_submitted_at.isoformat() if self.resolution_submitted_at else None,
+                "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            }
+        else:
+            data["resolution"] = None
+
+        feedback_list = [f.to_dict() for f in self.feedback] if self.feedback else []
+        data["feedback"] = feedback_list
+        data["latest_feedback"] = feedback_list[0] if feedback_list else None
+
         if include_detections:
             data["detections"] = [d.to_dict() for d in self.detections]
         return data
@@ -183,6 +214,32 @@ class Notification(db.Model):
             "severity": self.severity,
             "department": self.department,
             "is_read": bool(self.is_read),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class CitizenFeedback(db.Model):
+    __tablename__ = "citizen_feedback"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    complaint_id = db.Column(db.String(8), db.ForeignKey("complaints.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    result = db.Column(db.String(32), nullable=False, index=True)  # "CONFIRMED" or "NEEDS_ATTENTION"
+    comment = db.Column(db.Text, nullable=True)
+    image_path = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    user = db.relationship("User", backref=db.backref("feedback_items", lazy="dynamic"))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "complaint_id": self.complaint_id,
+            "user_id": self.user_id,
+            "submitted_by": self.user.username if self.user else "Citizen",
+            "result": self.result,
+            "comment": self.comment,
+            "image_path": self.image_path,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

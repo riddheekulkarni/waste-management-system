@@ -11,11 +11,12 @@ from lifecycle import (
     STATUS_IN_PROGRESS,
     STATUS_PROCESSING_FAILED,
     STATUS_REJECTED,
+    STATUS_RESOLUTION_SUBMITTED,
     STATUS_RESOLVED,
     STATUS_SUBMITTED,
     STATUS_VERIFIED,
 )
-from models import Complaint, db
+from models import Complaint, CitizenFeedback, db
 from routes.auth import require_role
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
@@ -46,6 +47,7 @@ def admin_overview():
         "verified": raw_status.get(STATUS_VERIFIED, 0),
         "assigned": raw_status.get(STATUS_ASSIGNED, 0),
         "in_progress": raw_status.get(STATUS_IN_PROGRESS, 0),
+        "resolution_submitted": raw_status.get(STATUS_RESOLUTION_SUBMITTED, 0),
         "resolved": raw_status.get(STATUS_RESOLVED, 0),
         "processing_failed": raw_status.get(STATUS_PROCESSING_FAILED, 0),
         "duplicate": raw_status.get(STATUS_DUPLICATE, 0),
@@ -189,16 +191,23 @@ def admin_analytics():
     cutoff = datetime.utcnow() - timedelta(days=days)
     query = Complaint.query.filter(Complaint.created_at >= cutoff)
 
-    # 1. Timeline Trends (daily counts)
+    # 1. Timeline Trends (daily counts) — single query, grouped in Python
+    from collections import defaultdict
+    _ts_rows = db.session.query(Complaint.created_at).filter(
+        Complaint.created_at >= cutoff
+    ).all()
+    _day_count_map = defaultdict(int)
+    for (created_at,) in _ts_rows:
+        if created_at:
+            _day_count_map[created_at.strftime("%Y-%m-%d")] += 1
+
     date_labels = []
     date_counts = []
     for i in range(days - 1, -1, -1):
-        day_start = (datetime.utcnow() - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
-        day_end = day_start + timedelta(days=1)
-        label = day_start.strftime("%b %d")
-        c_count = Complaint.query.filter(Complaint.created_at >= day_start, Complaint.created_at < day_end).count()
-        date_labels.append(label)
-        date_counts.append(c_count)
+        day_dt = (datetime.utcnow() - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+        date_labels.append(day_dt.strftime("%b %d"))
+        date_counts.append(_day_count_map.get(day_dt.strftime("%Y-%m-%d"), 0))
+
 
     # 2. Breakdown by Severity
     raw_sev = dict(
@@ -706,6 +715,56 @@ def admin_operational_insights():
         "cases_count": perf_submitted_verified["completed_cases"],
     }
 
+    # 7. Field Operations & Citizen Feedback Metrics
+    res_submissions_in_period = sum(1 for c in curr_complaints if c.resolution_submitted_at is not None)
+    total_res_submissions = Complaint.query.filter(Complaint.resolution_submitted_at.isnot(None)).count()
+
+    feedback_in_period = CitizenFeedback.query.filter(CitizenFeedback.created_at >= current_cutoff).all()
+    confirmations_cnt = sum(1 for f in feedback_in_period if f.result == "CONFIRMED")
+    needs_att_cnt = sum(1 for f in feedback_in_period if f.result == "NEEDS_ATTENTION")
+    total_fb_in_period = len(feedback_in_period)
+
+    feedback_response_rate = (
+        round((total_fb_in_period / res_submissions_in_period) * 100, 1)
+        if res_submissions_in_period > 0 else (100.0 if total_fb_in_period > 0 else 0.0)
+    )
+
+    reopened_count = (
+        db.session.query(func.count(func.distinct(CitizenFeedback.complaint_id)))
+        .join(Complaint, CitizenFeedback.complaint_id == Complaint.id)
+        .filter(CitizenFeedback.result == "NEEDS_ATTENTION", Complaint.status == STATUS_IN_PROGRESS)
+        .scalar() or 0
+    )
+
+    feedback_durations_hrs = []
+    feedbacks_with_complaints = (
+        db.session.query(CitizenFeedback, Complaint.resolution_submitted_at)
+        .join(Complaint, CitizenFeedback.complaint_id == Complaint.id)
+        .filter(Complaint.resolution_submitted_at.isnot(None), CitizenFeedback.created_at >= current_cutoff)
+        .all()
+    )
+    for fb_item, res_time in feedbacks_with_complaints:
+        if res_time and fb_item.created_at and fb_item.created_at >= res_time:
+            diff_hrs = (fb_item.created_at - res_time).total_seconds() / 3600.0
+            feedback_durations_hrs.append(diff_hrs)
+
+    avg_turnaround_hrs = (
+        round(sum(feedback_durations_hrs) / len(feedback_durations_hrs), 2)
+        if feedback_durations_hrs else None
+    )
+
+    field_operations_metrics = {
+        "resolution_submissions": res_submissions_in_period,
+        "total_resolution_submissions": total_res_submissions,
+        "citizen_confirmations": confirmations_cnt,
+        "needs_attention_responses": needs_att_cnt,
+        "total_feedback_count": total_fb_in_period,
+        "feedback_response_rate_pct": feedback_response_rate,
+        "reopened_returned_cases": reopened_count,
+        "avg_resolution_to_feedback_hours": avg_turnaround_hrs,
+        "avg_turnaround_formatted": f"{avg_turnaround_hrs} hrs" if avg_turnaround_hrs is not None else "Insufficient data",
+    }
+
     return jsonify({
         "time_range_days": days,
         "workload": {
@@ -731,6 +790,7 @@ def admin_operational_insights():
             "real_yolo_usage": real_yolo_count,
             "mock_demo_usage": mock_demo_count,
         },
+        "field_operations": field_operations_metrics,
         "civic_trends": trends_data,
         "trends": trends_data,
         "repeated_incidents": {
@@ -738,6 +798,60 @@ def admin_operational_insights():
             "concentrations": clusters,
             "total_concentrations": len(clusters),
         },
+        "status_code": 200,
+    }), 200
+
+
+@admin_bp.route("/feedback", methods=["GET"])
+@require_role("admin")
+def admin_feedback_list():
+    """
+    Municipal Operations Center: Paginated Citizen Feedback Queue.
+    Allows filtering by result (CONFIRMED / NEEDS_ATTENTION) and department.
+    """
+    raw_page = request.args.get("page", 1)
+    raw_per_page = request.args.get("per_page", 20)
+    result_filter = request.args.get("result", "").strip().upper()
+    dept_filter = request.args.get("department", "").strip()
+
+    try:
+        page = max(1, int(raw_page))
+        per_page = min(100, max(1, int(raw_per_page)))
+    except (ValueError, TypeError):
+        page = 1
+        per_page = 20
+
+    query = (
+        db.session.query(CitizenFeedback, Complaint)
+        .join(Complaint, CitizenFeedback.complaint_id == Complaint.id)
+    )
+
+    if result_filter in ("CONFIRMED", "NEEDS_ATTENTION"):
+        query = query.filter(CitizenFeedback.result == result_filter)
+    if dept_filter:
+        query = query.filter(Complaint.department == dept_filter)
+
+    query = query.order_by(CitizenFeedback.created_at.desc())
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    items = []
+    for fb, c in pagination.items:
+        fb_dict = fb.to_dict()
+        fb_dict["department"] = c.department
+        fb_dict["complaint_status"] = c.status
+        fb_dict["address"] = c.address
+        fb_dict["severity"] = c.severity_level
+        fb_dict["resolution_note"] = c.resolution_note
+        fb_dict["resolution_image_path"] = c.resolution_image_path
+        fb_dict["resolution_submitted_at"] = c.resolution_submitted_at.isoformat() if c.resolution_submitted_at else None
+        items.append(fb_dict)
+
+    return jsonify({
+        "feedback": items,
+        "total": pagination.total,
+        "pages": pagination.pages,
+        "current_page": pagination.page,
+        "per_page": pagination.per_page,
         "status_code": 200,
     }), 200
 

@@ -16,6 +16,7 @@ let adminMarkers = [];
 let detailMap = null;
 let severityChart = null;
 let departmentChart = null;
+let adminFeedbackFilter = "";
 
 // Default Map Center (Pune / Civic Default)
 const DEFAULT_LAT = 18.5204;
@@ -1326,17 +1327,94 @@ async function openComplaintDetail(ticketId) {
     const annotatedSrc = `/uploads/${c.annotated_image_path}`;
     const originalSrc = `/uploads/${c.image_path}`;
 
-    // Lifecycle Stepper calculation
-    const allStages = ["SUBMITTED", "AI_PROCESSING", "VERIFIED", "ASSIGNED", "IN_PROGRESS", "RESOLVED"];
+    // Lifecycle Stepper calculation (Phase 8 operational loop)
+    const allStages = ["SUBMITTED", "AI_PROCESSING", "VERIFIED", "ASSIGNED", "IN_PROGRESS", "RESOLUTION_SUBMITTED", "RESOLVED"];
     const currentStatus = (c.status || "").toUpperCase();
-    const activeIdx = allStages.indexOf(currentStatus) >= 0 ? allStages.indexOf(currentStatus) : 2;
+    const activeIdx = allStages.indexOf(currentStatus) >= 0 ? allStages.indexOf(currentStatus) : (currentStatus === "RESOLVED" ? 6 : 2);
+
+    // Phase 8: Field Resolution Evidence Card
+    const hasResolution = !!c.resolution;
+    const resolutionCardHtml = hasResolution ? `
+      <div class="civic-card" style="margin-top: 1rem; padding: 1rem; border-left: 4px solid var(--civic-blue); background: var(--bg-surface-elevated);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.4rem;">
+          <h4 style="margin: 0; font-size: 0.92rem; display: flex; align-items: center; gap: 0.4rem;">
+            <span>🚚</span> Field Resolution Evidence Submitted
+          </h4>
+          <span class="badge ${c.status === 'RESOLVED' ? 'badge-resolved' : 'badge-progress'}">${c.status === 'RESOLUTION_SUBMITTED' ? 'Resolution Submitted' : c.status}</span>
+        </div>
+        <p style="font-size: 0.85rem; margin-bottom: 0.35rem;"><strong>Assigned Department:</strong> ${c.department || 'Field Services'}</p>
+        <p style="font-size: 0.85rem; margin-bottom: 0.35rem;"><strong>Field Resolution Note:</strong> ${c.resolution.note || 'Work completed by municipal field crew.'}</p>
+        ${c.resolution.submitted_at ? `<p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem;">Submitted on: ${new Date(c.resolution.submitted_at).toLocaleString()}</p>` : ''}
+        ${c.resolution.image_path ? `
+          <div style="margin-top: 0.6rem;">
+            <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); display: block; margin-bottom: 0.35rem;">Field Photo Evidence:</span>
+            <div style="border-radius: var(--radius-sm); overflow: hidden; max-width: 320px; border: 1px solid var(--border-color); background: #000;">
+              <a href="/uploads/${c.resolution.image_path}" target="_blank">
+                <img src="/uploads/${c.resolution.image_path}" alt="Field resolution evidence photo" style="width: 100%; max-height: 200px; object-fit: contain; display: block;" />
+              </a>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    ` : '';
+
+    // Phase 8: Citizen Feedback Form (Available on RESOLUTION_SUBMITTED)
+    const canSubmitFeedback = c.status === "RESOLUTION_SUBMITTED";
+    const feedbackActionHtml = canSubmitFeedback ? `
+      <div class="civic-card" style="margin-top: 1rem; padding: 1.15rem; border: 1px solid var(--civic-blue); background: var(--bg-surface);">
+        <h4 style="margin: 0 0 0.4rem 0; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+          <span>💬</span> Citizen Resolution Review
+        </h4>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+          Please review the field resolution evidence above and indicate whether the reported issue has been satisfactorily resolved.
+        </p>
+        <div class="form-group" style="margin-bottom: 0.6rem;">
+          <label style="font-size: 0.78rem; font-weight: 700;">Feedback Comment (Optional)</label>
+          <textarea id="citizen-feedback-comment" placeholder="Add any details about site condition (e.g. area is clean, or some debris remains)..." style="width: 100%; min-height: 60px; padding: 0.5rem; font-size: 0.82rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); resize: vertical;"></textarea>
+        </div>
+        <div class="form-group" style="margin-bottom: 0.85rem;">
+          <label style="font-size: 0.78rem; font-weight: 700;">Attach Follow-Up Photo (Optional)</label>
+          <input type="file" id="citizen-feedback-image" accept="image/*" style="font-size: 0.8rem; width: 100%;" />
+        </div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary" id="btn-feedback-confirm" onclick="submitCitizenFeedback('${c.ticket_id}', 'CONFIRMED')" style="flex: 1;">
+            ✅ Confirm Resolved
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-feedback-needs-att" onclick="submitCitizenFeedback('${c.ticket_id}', 'NEEDS_ATTENTION')" style="flex: 1;">
+            ⚠️ Needs Attention
+          </button>
+        </div>
+      </div>
+    ` : '';
+
+    // Phase 8: Citizen Feedback History
+    const feedbacks = c.feedback || [];
+    const feedbackHistoryHtml = feedbacks.length > 0 ? `
+      <div class="civic-card" style="margin-top: 1rem; padding: 1rem;">
+        <h4 style="margin: 0 0 0.5rem 0; font-size: 0.88rem; display: flex; align-items: center; gap: 0.4rem;">
+          <span>📝</span> Citizen Feedback History
+        </h4>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          ${feedbacks.map(f => `
+            <div style="padding: 0.6rem 0.85rem; background: var(--bg-surface-elevated); border-radius: var(--radius-sm); border-left: 3px solid ${f.result === 'CONFIRMED' ? 'var(--civic-emerald)' : 'var(--civic-amber)'}; font-size: 0.82rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <span class="badge ${f.result === 'CONFIRMED' ? 'badge-resolved' : 'badge-failed'}">${f.result === 'CONFIRMED' ? 'Confirmed Resolved' : 'Needs Attention'}</span>
+                <span style="color: var(--text-muted); font-size: 0.75rem;">${f.created_at ? new Date(f.created_at).toLocaleString() : ''}</span>
+              </div>
+              ${f.comment ? `<p style="margin: 0.35rem 0 0 0; color: var(--text-primary); line-height: 1.4;">${f.comment}</p>` : ''}
+              ${f.image_path ? `<div style="margin-top: 0.35rem;"><a href="/uploads/${f.image_path}" target="_blank" style="color: var(--civic-blue); font-size: 0.75rem;">📷 View Attached Citizen Evidence</a></div>` : ''}
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    ` : '';
 
     modalContent.innerHTML = `
       <div style="margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
         <div>
           <div style="display: flex; align-items: center; gap: 0.6rem;">
             <h3 style="font-size: 1.35rem; margin: 0;">Ticket #${c.ticket_id}</h3>
-            <span class="badge ${c.status === 'Resolved' ? 'badge-resolved' : 'badge-progress'}">${c.status}</span>
+            <span class="badge ${c.status === 'Resolved' || c.status === 'RESOLVED' ? 'badge-resolved' : 'badge-progress'}">${c.status}</span>
           </div>
           <p style="color: var(--text-muted); font-size: 0.82rem; margin-top: 0.35rem;">
             Reported on ${date} by <strong>${c.submitted_by}</strong>
@@ -1362,7 +1440,7 @@ async function openComplaintDetail(ticketId) {
                 <div style="width: 22px; height: 22px; border-radius: 50%; background: ${col}; color: #fff; margin: 0 auto 4px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800;">
                   ${isDone ? '✓' : (i + 1)}
                 </div>
-                <span style="font-size: 0.68rem; font-weight: 600; color: ${col};">${st}</span>
+                <span style="font-size: 0.65rem; font-weight: 600; color: ${col}; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${st.replace('_', ' ')}</span>
               </div>
             `;
           }).join("")}
@@ -1405,6 +1483,10 @@ async function openComplaintDetail(ticketId) {
             ${c.is_duplicate ? `<p style="color: var(--civic-amber); font-size: 0.82rem; margin-top: 0.5rem;">⚠️ Proximity duplicate linked to Ticket #${c.duplicate_of_id}</p>` : ''}
           </div>
           <div id="detail-map" class="interactive-map" style="height: 220px;"></div>
+
+          ${resolutionCardHtml}
+          ${feedbackActionHtml}
+          ${feedbackHistoryHtml}
         </div>
       </div>
     `;
@@ -1422,6 +1504,56 @@ async function openComplaintDetail(ticketId) {
 
   } catch (err) {
     showToast(err.message, "error");
+  }
+}
+
+async function submitCitizenFeedback(ticketId, result) {
+  const btnConfirm = document.getElementById("btn-feedback-confirm");
+  const btnNeedsAtt = document.getElementById("btn-feedback-needs-att");
+  if (btnConfirm) btnConfirm.disabled = true;
+  if (btnNeedsAtt) btnNeedsAtt.disabled = true;
+
+  const commentEl = document.getElementById("citizen-feedback-comment");
+  const imageEl = document.getElementById("citizen-feedback-image");
+  const comment = commentEl ? commentEl.value.trim() : "";
+  const hasFile = imageEl && imageEl.files && imageEl.files.length > 0;
+
+  try {
+    let res;
+    if (hasFile) {
+      const formData = new FormData();
+      formData.append("result", result);
+      if (comment) formData.append("comment", comment);
+      formData.append("image", imageEl.files[0]);
+      res = await fetch(`${API}/complaints/${ticketId}/feedback`, {
+        method: "POST",
+        body: formData,
+      });
+    } else {
+      res = await fetch(`${API}/complaints/${ticketId}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ result, comment }),
+      });
+    }
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Could not submit feedback.");
+    }
+
+    showToast(
+      result === "CONFIRMED"
+        ? `Thank you! Resolution for #${ticketId} confirmed.`
+        : `Ticket #${ticketId} flagged for further attention. Municipal team notified.`,
+      "success"
+    );
+    openComplaintDetail(ticketId);
+    if (typeof loadCitizenComplaints === "function") loadCitizenComplaints();
+  } catch (err) {
+    showToast(err.message, "error");
+    if (btnConfirm) btnConfirm.disabled = false;
+    if (btnNeedsAtt) btnNeedsAtt.disabled = false;
   }
 }
 
@@ -1618,6 +1750,19 @@ function setupAdminDashboard() {
   const usersRefresh = document.getElementById("admin-refresh-users-btn");
   if (usersRefresh) usersRefresh.addEventListener("click", loadAdminUsers);
 
+  // Feedback filter pills & refresh
+  const fbPills = document.querySelectorAll("#admin-feedback-filter-pills .time-pill-btn");
+  fbPills.forEach(pill => {
+    pill.addEventListener("click", () => {
+      fbPills.forEach(p => p.classList.remove("active"));
+      pill.classList.add("active");
+      adminFeedbackFilter = pill.dataset.fbFilter || "";
+      loadAdminFeedback(adminFeedbackFilter);
+    });
+  });
+  const fbRefresh = document.getElementById("admin-refresh-feedback-btn");
+  if (fbRefresh) fbRefresh.addEventListener("click", () => loadAdminFeedback(adminFeedbackFilter));
+
   // Admin incident modal close button
   const closeAdminModal = document.getElementById("close-admin-modal");
   if (closeAdminModal) {
@@ -1641,6 +1786,7 @@ function switchAdminView(viewId) {
   // Trigger relevant loader
   if (viewId === "overview") loadAdminOverview();
   else if (viewId === "complaints") loadAdminComplaints();
+  else if (viewId === "feedback") loadAdminFeedback();
   else if (viewId === "processing") loadAdminProcessingQueue();
   else if (viewId === "map") loadAdminIncidentMap();
   else if (viewId === "departments") loadAdminDepartments();
@@ -1844,6 +1990,31 @@ function initAdminSSE() {
     adminSSE.addEventListener("processing_failure_alert", (e) => handleAdminEvent("AI FAIL", e.data, "feed-failed"));
     adminSSE.addEventListener("assignment_alert", (e) => handleAdminEvent("ASSIGNMENT", e.data, "feed-stage"));
     adminSSE.addEventListener("resolution_alert", (e) => handleAdminEvent("RESOLVED", e.data, "feed-resolved"));
+
+    // Phase 8 Resolution & Citizen Feedback events
+    adminSSE.addEventListener("resolution_submitted", (e) => {
+      handleAdminEvent("FIELD RES", e.data, "feed-ai");
+      loadAdminOverview();
+      if (adminActiveView === "complaints") loadAdminComplaints();
+    });
+    adminSSE.addEventListener("citizen_feedback_received", (e) => {
+      handleAdminEvent("FEEDBACK", e.data, "feed-stage");
+      loadAdminOverview();
+      if (adminActiveView === "feedback") loadAdminFeedback();
+      if (adminActiveView === "complaints") loadAdminComplaints();
+    });
+    adminSSE.addEventListener("resolution_confirmed", (e) => {
+      handleAdminEvent("CONFIRMED", e.data, "feed-resolved");
+      loadAdminOverview();
+      if (adminActiveView === "feedback") loadAdminFeedback();
+      if (adminActiveView === "complaints") loadAdminComplaints();
+    });
+    adminSSE.addEventListener("resolution_needs_attention", (e) => {
+      handleAdminEvent("NEEDS ATTN", e.data, "feed-failed");
+      loadAdminOverview();
+      if (adminActiveView === "feedback") loadAdminFeedback();
+      if (adminActiveView === "complaints") loadAdminComplaints();
+    });
 
     adminSSE.onerror = () => {
       // Browser EventSource automatically reconnects with backoff
@@ -2332,6 +2503,17 @@ async function loadAdminInsights(days = 7) {
     setEl("ins-ai-failed", ai.failed);
     setEl("ins-ai-retries", ai.retries);
     setEl("ins-ai-yolo", ai.real_yolo_usage);
+
+    // Phase 8 Field Operations & Citizen Feedback Metrics
+    const fOps = data.field_operations || {};
+    const fRespRate = document.getElementById("ins-field-response-rate");
+    if (fRespRate) fRespRate.textContent = `${fOps.feedback_response_rate_pct !== undefined ? fOps.feedback_response_rate_pct : 0}% Response Rate`;
+    setEl("ins-field-res-subs", fOps.total_resolution_submissions !== undefined ? fOps.total_resolution_submissions : (fOps.resolution_submissions || 0));
+    setEl("ins-field-confirms", fOps.citizen_confirmations);
+    setEl("ins-field-needs-att", fOps.needs_attention_responses);
+    setEl("ins-field-reopened", fOps.reopened_returned_cases);
+    const fTurnaround = document.getElementById("ins-field-turnaround");
+    if (fTurnaround) fTurnaround.textContent = fOps.avg_turnaround_formatted || "Insufficient data";
 
     // 4. Recurring Report Concentrations
     const recurTbody = document.getElementById("ins-recurring-tbody");
@@ -2852,7 +3034,7 @@ async function openAdminIncidentModal(ticketId) {
       "AI_PROCESSING": ["VERIFIED", "PROCESSING_FAILED", "DUPLICATE"],
       "PROCESSING_FAILED": ["AI_PROCESSING", "REJECTED"],
       "VERIFIED": ["ASSIGNED", "IN_PROGRESS", "RESOLVED", "DUPLICATE", "REJECTED", "NEEDS_INFORMATION"],
-      "ASSIGNED": ["IN_PROGRESS", "RESOLVED", "REJECTED", "NEEDS_INFORMATION"],
+      "ASSIGNED": ["IN_PROGRESS", "RESOLUTION_SUBMITTED", "RESOLVED", "REJECTED", "NEEDS_INFORMATION"],
       "IN_PROGRESS": ["RESOLUTION_SUBMITTED", "RESOLVED", "REJECTED", "NEEDS_INFORMATION"],
       "RESOLUTION_SUBMITTED": ["RESOLVED", "IN_PROGRESS", "REJECTED"],
       "NEEDS_INFORMATION": ["IN_PROGRESS", "VERIFIED", "REJECTED"],
@@ -2870,6 +3052,72 @@ async function openAdminIncidentModal(ticketId) {
       "Health & Hazmat Department",
       "Public Works Department",
     ];
+
+    const canSubmitResolution = ["ASSIGNED", "IN_PROGRESS"].includes(currentStatus);
+    const hasResolution = !!c.resolution;
+
+    // Field Work section (Phase 8)
+    const fieldWorkHtml = `
+      <div class="civic-card" style="padding: 0.85rem; margin-top: 0.65rem;">
+        <h4 style="font-size: 0.82rem; margin-bottom: 0.5rem; text-transform: uppercase; color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem;">
+          <span>🚚</span> Field Work & Resolution Evidence
+        </h4>
+        <div style="font-size: 0.82rem; margin-bottom: 0.5rem;">
+          Status: <strong>${c.status}</strong> | Department: <strong>${c.department || 'Unassigned'}</strong>
+        </div>
+        ${hasResolution ? `
+          <div style="background: var(--bg-surface-elevated); padding: 0.65rem 0.8rem; border-radius: var(--radius-sm); border-left: 3px solid var(--civic-emerald); font-size: 0.82rem; margin-bottom: 0.5rem;">
+            <div><strong>Resolution Note:</strong> ${c.resolution.note || 'Field work completed.'}</div>
+            ${c.resolution.submitted_at ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Submitted: ${new Date(c.resolution.submitted_at).toLocaleString()}</div>` : ''}
+            ${c.resolution.image_path ? `
+              <div style="margin-top: 6px;">
+                <a href="/uploads/${c.resolution.image_path}" target="_blank" style="color: var(--civic-blue); font-size: 0.78rem; display: inline-flex; align-items: center; gap: 4px;">
+                  📷 View Resolution Photo
+                </a>
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+        ${canSubmitResolution ? `
+          <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+            <label style="font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 0.25rem;">Submit Resolution Evidence</label>
+            <textarea id="modal-resolution-note" placeholder="Describe field actions taken (e.g. crew cleared 1.5 tons of debris, site sanitized)..." style="width: 100%; min-height: 48px; padding: 0.4rem; font-size: 0.8rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); resize: vertical; margin-bottom: 0.4rem;"></textarea>
+            <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
+              <input type="file" id="modal-resolution-image" accept="image/*" style="font-size: 0.75rem; flex: 1;" />
+              <button class="btn btn-primary btn-sm" id="btn-submit-resolution" onclick="submitFieldResolution('${c.ticket_id}')">Submit Resolution Evidence</button>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+
+    // Citizen Feedback section (Phase 8)
+    const feedbackList = c.feedback || [];
+    const feedbackHtml = `
+      <div class="civic-card" style="padding: 0.85rem; margin-top: 0.65rem;">
+        <h4 style="font-size: 0.82rem; margin-bottom: 0.5rem; text-transform: uppercase; color: var(--text-secondary); display: flex; align-items: center; gap: 0.35rem;">
+          <span>💬</span> Citizen Feedback
+        </h4>
+        ${feedbackList.length > 0 ? `
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            ${feedbackList.map(fb => `
+              <div style="background: var(--bg-surface-elevated); padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); border-left: 3px solid ${fb.result === 'CONFIRMED' ? 'var(--civic-emerald)' : 'var(--civic-amber)'}; font-size: 0.8rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span class="badge ${fb.result === 'CONFIRMED' ? 'badge-resolved' : 'badge-failed'}">${fb.result}</span>
+                  <span style="font-size: 0.72rem; color: var(--text-muted);">${fb.created_at ? new Date(fb.created_at).toLocaleString() : ''}</span>
+                </div>
+                ${fb.comment ? `<p style="margin: 0.25rem 0 0 0; color: var(--text-primary);">${fb.comment}</p>` : ''}
+                ${fb.image_path ? `<div style="margin-top: 2px;"><a href="/uploads/${fb.image_path}" target="_blank" style="color: var(--civic-blue); font-size: 0.75rem;">📷 View Attached Citizen Photo</a></div>` : ''}
+              </div>
+            `).join("")}
+          </div>
+        ` : `
+          <div style="font-size: 0.8rem; color: var(--text-muted);">
+            ${c.status === 'RESOLUTION_SUBMITTED' ? '⏳ Pending citizen review (evidence submitted).' : 'No citizen feedback recorded.'}
+          </div>
+        `}
+      </div>
+    `;
 
     bodyEl.innerHTML = `
       <div class="admin-inspector-grid">
@@ -2952,6 +3200,9 @@ async function openAdminIncidentModal(ticketId) {
             <div><strong>AI Pipeline:</strong> <span class="${c.ai_mode === 'REAL_YOLO' ? 'badge-mode-real' : 'badge-mode-mock'}">${c.ai_mode || 'MOCK_DEMO'}</span></div>
             ${c.is_duplicate ? `<div style="color: var(--civic-amber);">⚠️ Proximity duplicate linked to #${c.duplicate_of_id}</div>` : ''}
           </div>
+
+          ${fieldWorkHtml}
+          ${feedbackHtml}
         </div>
       </div>
     `;
@@ -2960,6 +3211,112 @@ async function openAdminIncidentModal(ticketId) {
 
   } catch (err) {
     showToast(err.message, "error");
+  }
+}
+
+async function submitFieldResolution(ticketId) {
+  const btn = document.getElementById("btn-submit-resolution");
+  if (btn) btn.disabled = true;
+
+  const noteEl = document.getElementById("modal-resolution-note");
+  const imageEl = document.getElementById("modal-resolution-image");
+  const note = noteEl ? noteEl.value.trim() : "";
+  const hasFile = imageEl && imageEl.files && imageEl.files.length > 0;
+
+  if (!note && !hasFile) {
+    showToast("Please provide a resolution note or evidence photo.", "error");
+    if (btn) btn.disabled = false;
+    return;
+  }
+
+  try {
+    let res;
+    if (hasFile) {
+      const formData = new FormData();
+      if (note) formData.append("note", note);
+      formData.append("image", imageEl.files[0]);
+      res = await fetch(`${API}/complaints/${ticketId}/resolution`, {
+        method: "POST",
+        body: formData,
+      });
+    } else {
+      res = await fetch(`${API}/complaints/${ticketId}/resolution`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note }),
+      });
+    }
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Could not submit resolution.");
+
+    showToast(`Resolution evidence submitted for Ticket #${ticketId}`, "success");
+    openAdminIncidentModal(ticketId);
+    loadAdminOverview();
+    if (adminActiveView === "complaints") loadAdminComplaints();
+    if (adminActiveView === "feedback") loadAdminFeedback();
+  } catch (err) {
+    showToast(err.message, "error");
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function loadAdminFeedback(filter = adminFeedbackFilter) {
+  adminFeedbackFilter = filter;
+  const tbody = document.getElementById("admin-feedback-tbody");
+  if (!tbody) return;
+
+  document.querySelectorAll("#admin-feedback-filter-pills .time-pill-btn").forEach(btn => {
+    btn.classList.toggle("active", (btn.dataset.fbFilter || "") === adminFeedbackFilter);
+  });
+
+  try {
+    const url = adminFeedbackFilter ? `${API}/admin/feedback?result=${adminFeedbackFilter}` : `${API}/admin/feedback`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Could not load citizen feedback queue.");
+    const data = await res.json();
+    const items = data.feedback || [];
+
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No citizen feedback records found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = items.map(fb => {
+      const isConfirmed = fb.result === "CONFIRMED";
+      const resultBadge = isConfirmed
+        ? `<span class="badge badge-resolved">✅ Confirmed</span>`
+        : `<span class="badge badge-failed">⚠️ Needs Attention</span>`;
+      const date = fb.created_at ? new Date(fb.created_at).toLocaleString() : "—";
+      const hasPhoto = !!fb.image_path;
+      const photoHtml = hasPhoto
+        ? `<a href="/uploads/${fb.image_path}" target="_blank" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--civic-blue);">📷 View Photo</a>`
+        : `<span style="color: var(--text-muted); font-size: 0.78rem;">None</span>`;
+
+      return `
+        <tr>
+          <td style="font-family: monospace; font-weight: 700;">
+            <a href="javascript:void(0)" onclick="openAdminIncidentModal('${fb.complaint_id}')" style="color: var(--civic-blue); text-decoration: none;">#${fb.complaint_id}</a>
+          </td>
+          <td><span class="badge badge-low">${fb.department || 'Sanitation'}</span></td>
+          <td>${resultBadge}</td>
+          <td style="max-width: 220px; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${fb.comment || ''}">
+            ${fb.comment || '<span style="color: var(--text-muted);">No comment</span>'}
+          </td>
+          <td>${photoHtml}</td>
+          <td style="max-width: 180px; font-size: 0.78rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${fb.resolution_note || ''}">
+            ${fb.resolution_note || '—'}
+          </td>
+          <td style="font-size: 0.78rem; color: var(--text-secondary);">${date}</td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick="openAdminIncidentModal('${fb.complaint_id}')" style="padding: 2px 8px; font-size: 0.75rem;">Inspect</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  } catch (err) {
+    console.error("Error loading citizen feedback:", err);
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--civic-red); padding: 1.5rem;">Failed to load feedback queue.</td></tr>`;
   }
 }
 

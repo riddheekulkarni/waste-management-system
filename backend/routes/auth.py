@@ -132,10 +132,25 @@ def get_current_user():
 def list_users():
     """
     Admin-only endpoint listing registered users for municipal operations management.
+    Paginated to prevent unbounded result sets.
     """
-    users = User.query.order_by(User.created_at.desc()).all()
+    raw_page = request.args.get("page", 1)
+    raw_per_page = request.args.get("per_page", 50)
+    try:
+        page = max(1, int(raw_page))
+        per_page = min(200, max(1, int(raw_per_page)))
+    except (ValueError, TypeError):
+        page = 1
+        per_page = 50
+
+    pagination = User.query.order_by(User.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
     return jsonify({
-        "users": [u.to_dict() for u in users],
-        "total": len(users),
+        "users": [u.to_dict() for u in pagination.items],
+        "total": pagination.total,
+        "page": pagination.page,
+        "pages": pagination.pages,
+        "per_page": pagination.per_page,
         "status_code": 200
     }), 200

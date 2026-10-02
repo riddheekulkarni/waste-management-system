@@ -156,6 +156,10 @@ CATEGORY_UNASSIGNED_REPORT = "UNASSIGNED_REPORT"
 CATEGORY_SLA_WARNING = "SLA_WARNING"
 CATEGORY_STATUS_CHANGED = "STATUS_CHANGED"
 CATEGORY_SYSTEM_ALERT = "SYSTEM_ALERT"
+CATEGORY_RESOLUTION_SUBMITTED = "RESOLUTION_SUBMITTED"
+CATEGORY_CITIZEN_FEEDBACK_RECEIVED = "CITIZEN_FEEDBACK_RECEIVED"
+CATEGORY_RESOLUTION_CONFIRMED = "RESOLUTION_CONFIRMED"
+CATEGORY_RESOLUTION_NEEDS_ATTENTION = "RESOLUTION_NEEDS_ATTENTION"
 
 
 def create_notification(
@@ -277,6 +281,53 @@ def trigger_duplicate_rule(complaint, duplicate_of_id, app=None):
         severity=complaint.severity_level,
         department=complaint.department,
         deduplicate=True,
+        app=app,
+    )
+
+
+def trigger_resolution_submitted_notification(complaint, resolution_note="", app=None):
+    """
+    Send in-app notification to citizen owner that field resolution evidence has been submitted.
+    """
+    if not complaint.user_id:
+        return None
+    note_snippet = f": '{resolution_note}'" if resolution_note else ""
+    return create_notification(
+        category=CATEGORY_RESOLUTION_SUBMITTED,
+        title=f"Resolution Submitted: #{complaint.id}",
+        message=f"The assigned department submitted resolution evidence for #{complaint.id}{note_snippet}. Please review and confirm or flag if it needs attention.",
+        ticket_id=complaint.id,
+        user_id=complaint.user_id,
+        severity=complaint.severity_level,
+        department=complaint.department,
+        deduplicate=True,
+        app=app,
+    )
+
+
+def trigger_citizen_feedback_notification(complaint, feedback, app=None):
+    """
+    Send operational alert to admin dispatcher when citizen submits feedback on resolution.
+    """
+    if feedback.result == "CONFIRMED":
+        cat = CATEGORY_RESOLUTION_CONFIRMED
+        title = f"Resolution Confirmed: #{complaint.id}"
+        msg = f"Citizen confirmed resolution for Ticket #{complaint.id}. Issue is now marked as RESOLVED."
+    else:
+        cat = CATEGORY_RESOLUTION_NEEDS_ATTENTION
+        title = f"Needs Attention: #{complaint.id}"
+        comment_text = f" Citizen note: '{feedback.comment}'." if feedback.comment else ""
+        msg = f"Citizen reported that Ticket #{complaint.id} still needs attention.{comment_text} Status returned to IN_PROGRESS."
+
+    return create_notification(
+        category=cat,
+        title=title,
+        message=msg,
+        ticket_id=complaint.id,
+        user_id=None,  # Admin broadcast
+        severity=complaint.severity_level,
+        department=complaint.department,
+        deduplicate=False,
         app=app,
     )
 

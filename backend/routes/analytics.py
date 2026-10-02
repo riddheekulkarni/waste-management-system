@@ -62,7 +62,7 @@ def geo_analytics():
     complaints = Complaint.query.filter(
         Complaint.latitude.isnot(None),
         Complaint.longitude.isnot(None)
-    ).all()
+    ).order_by(Complaint.created_at.desc()).limit(2000).all()
 
     points = [{
         "ticket_id": c.id,

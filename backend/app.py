@@ -48,6 +48,17 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(notifications_bp)
 
+    # ── Security Response Headers ────────────────────────────────────────────
+    @app.after_request
+    def add_security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # Only set HSTS in production (HTTPS)
+        if app.config.get("IS_PRODUCTION"):
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
     # ── CLI Commands ───────────────────────────────────────────────────────
     @app.cli.command("seed-db")
     def seed_db_command():
@@ -109,7 +120,17 @@ def create_app():
 
         # Citizens may strictly access only images belonging to their own complaints
         clean_name = safe_name[len("annotated_"):] if safe_name.startswith("annotated_") else safe_name
-        complaint = Complaint.query.filter_by(image_path=clean_name).first()
+        complaint = Complaint.query.filter(
+            (Complaint.image_path == clean_name) |
+            (Complaint.resolution_image_path == safe_name)
+        ).first()
+
+        if not complaint:
+            from models import CitizenFeedback
+            fb = CitizenFeedback.query.filter_by(image_path=safe_name).first()
+            if fb:
+                complaint = fb.complaint
+
         if not complaint or complaint.user_id != user_id:
             return jsonify({
                 "error": "Access denied. You may only view images from your own complaints.",
@@ -123,4 +144,7 @@ def create_app():
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(debug=True, host="0.0.0.0", port=5050)
+    import os as _os
+    _debug = _os.environ.get("FLASK_ENV", "development").lower() != "production"
+    _port = int(_os.environ.get("PORT", 5050))
+    app.run(debug=_debug, host="0.0.0.0", port=_port)

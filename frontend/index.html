@@ -632,6 +632,9 @@
           <button class="admin-nav-btn" data-admin-view="complaints" id="admin-btn-complaints" type="button">
             <span>📋</span> Complaints Queue <span class="badge-count" id="admin-count-complaints">0</span>
           </button>
+          <button class="admin-nav-btn" data-admin-view="feedback" id="admin-btn-feedback" type="button">
+            <span>💬</span> Citizen Feedback
+          </button>
           <button class="admin-nav-btn" data-admin-view="processing" id="admin-btn-processing" type="button">
             <span>🤖</span> AI Processing <span class="badge-count badge-count-warn hidden" id="admin-count-failed">0</span>
           </button>
@@ -1270,6 +1273,20 @@
                     <div>YOLOv8: <strong id="ins-ai-yolo" style="color: var(--text-primary);">0</strong></div>
                   </div>
                 </div>
+
+                <div style="background: var(--bg-surface-elevated); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                    <span style="font-size: 0.85rem; font-weight: 700;">Field Operations & Citizen Feedback</span>
+                    <span id="ins-field-response-rate" class="badge badge-resolved">0% Response Rate</span>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                    <div>Resolutions: <strong id="ins-field-res-subs" style="color: var(--text-primary);">0</strong></div>
+                    <div>Confirmed: <strong id="ins-field-confirms" style="color: var(--civic-emerald);">0</strong></div>
+                    <div>Needs Attention: <strong id="ins-field-needs-att" style="color: var(--civic-amber);">0</strong></div>
+                    <div>Reopened: <strong id="ins-field-reopened" style="color: var(--civic-red);">0</strong></div>
+                    <div>Avg Turnaround: <strong id="ins-field-turnaround" style="color: var(--text-primary);">--</strong></div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1300,6 +1317,46 @@
                 </thead>
                 <tbody id="ins-recurring-tbody">
                   <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Scanning spatial clusters...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 10. CITIZEN FEEDBACK VIEW PANE (PHASE 8) -->
+        <div class="admin-view-pane hidden" id="admin-view-feedback">
+          <div class="civic-card" style="padding: 1.25rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+              <div>
+                <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 0.25rem;">Citizen Resolution Feedback Queue</h3>
+                <p style="font-size: 0.85rem; color: var(--text-secondary);">Direct citizen validation of completed field work, confirmations, and follow-up requests.</p>
+              </div>
+              <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <div class="analytics-time-pills" id="admin-feedback-filter-pills">
+                  <button class="time-pill-btn active" data-fb-filter="" type="button">All Feedback</button>
+                  <button class="time-pill-btn" data-fb-filter="NEEDS_ATTENTION" type="button">⚠️ Needs Attention</button>
+                  <button class="time-pill-btn" data-fb-filter="CONFIRMED" type="button">✅ Confirmed</button>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="admin-refresh-feedback-btn" type="button">🔄 Refresh</button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table id="admin-feedback-table">
+                <thead>
+                  <tr>
+                    <th>Ticket</th>
+                    <th>Department</th>
+                    <th>Citizen Result</th>
+                    <th>Citizen Note</th>
+                    <th>Evidence Photo</th>
+                    <th>Resolution Summary</th>
+                    <th>Submitted At</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-feedback-tbody">
+                  <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Loading citizen feedback queue...</td></tr>
                 </tbody>
               </table>
             </div>

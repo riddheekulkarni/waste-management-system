@@ -45,6 +45,10 @@ EVENT_HIGH_SEVERITY_ALERT = "high_severity_alert"
 EVENT_PROCESSING_FAILURE_ALERT = "processing_failure_alert"
 EVENT_ASSIGNMENT_ALERT = "assignment_alert"
 EVENT_RESOLUTION_ALERT = "resolution_alert"
+EVENT_RESOLUTION_SUBMITTED = "resolution_submitted"
+EVENT_CITIZEN_FEEDBACK = "citizen_feedback_received"
+EVENT_RESOLUTION_CONFIRMED = "resolution_confirmed"
+EVENT_RESOLUTION_NEEDS_ATTENTION = "resolution_needs_attention"
 
 # In-memory subscriber registry for testing / fallback mode
 _memory_subscribers: Dict[str, list] = {}

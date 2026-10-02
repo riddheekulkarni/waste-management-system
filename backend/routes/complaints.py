@@ -1,3 +1,4 @@
+from datetime import datetime, timezone, timedelta
 import math
 import os
 import uuid
@@ -10,6 +11,10 @@ from events import (
     EVENT_COMPLAINT_SUBMITTED,
     EVENT_STAGE_CHANGED,
     EVENT_STATUS_CHANGED,
+    EVENT_RESOLUTION_SUBMITTED,
+    EVENT_CITIZEN_FEEDBACK,
+    EVENT_RESOLUTION_CONFIRMED,
+    EVENT_RESOLUTION_NEEDS_ATTENTION,
     publish_complaint_event,
     subscribe_admin_events,
     subscribe_complaint_events,
@@ -26,14 +31,22 @@ from lifecycle import (
     STAGE_FAILED,
     STAGE_QUEUED,
     STATUS_AI_PROCESSING,
+    STATUS_ASSIGNED,
     STATUS_DUPLICATE,
+    STATUS_IN_PROGRESS,
     STATUS_PROCESSING_FAILED,
+    STATUS_RESOLUTION_SUBMITTED,
+    STATUS_RESOLVED,
     STATUS_VERIFIED,
     can_transition,
     normalize_status,
 )
-from models import Complaint, DetectionItem, db
-from notifications import notify_citizen
+from models import Complaint, DetectionItem, CitizenFeedback, db
+from notifications import (
+    notify_citizen,
+    trigger_resolution_submitted_notification,
+    trigger_citizen_feedback_notification,
+)
 from job_queue import enqueue_complaint_job
 from routes.auth import login_required, require_role
 from tasks import find_nearby_duplicate
@@ -544,6 +557,340 @@ def update_status(ticket_id):
     res_dict["notification"] = notification_result
 
     return jsonify(res_dict)
+
+
+@complaints_bp.route("/<ticket_id>/resolution", methods=["POST"])
+@require_role("admin")
+def submit_resolution(ticket_id):
+    """
+    Submits field resolution evidence for an assigned or in-progress complaint.
+    Strictly restricted to authorized municipal / admin personnel.
+    """
+    safe_id = str(ticket_id).strip()
+    if not safe_id or len(safe_id) > 16:
+        return jsonify({"error": "Invalid ticket ID format.", "status_code": 400}), 400
+
+    complaint = db.session.get(Complaint, safe_id)
+    if not complaint:
+        return jsonify({"error": "Ticket not found.", "status_code": 404}), 404
+
+    # Validate lifecycle transition: complaint must be in ASSIGNED or IN_PROGRESS
+    if not can_transition(complaint.status, STATUS_RESOLUTION_SUBMITTED):
+        return jsonify({
+            "error": f"Cannot submit resolution for ticket in status '{complaint.status}'. Ticket must be in ASSIGNED or IN_PROGRESS.",
+            "status_code": 400
+        }), 400
+
+    # Extract resolution note
+    note = ""
+    if request.is_json:
+        note = (request.json.get("note") or "").strip()
+    else:
+        note = (request.form.get("note") or "").strip()
+
+    # Image handling
+    image_filename = None
+    if "image" in request.files:
+        file = request.files["image"]
+        if file and file.filename:
+            if not allowed_file(file.filename):
+                return jsonify({"error": "Unsupported file format for resolution image.", "status_code": 400}), 400
+            try:
+                img = Image.open(file.stream)
+                img.verify()
+                file.stream.seek(0)
+            except Exception:
+                return jsonify({"error": "Invalid or corrupted image file.", "status_code": 400}), 400
+
+            ext = file.filename.rsplit(".", 1)[1].lower()
+            image_filename = f"resolution_{complaint.id}_{uuid.uuid4().hex[:8]}.{ext}"
+            upload_path = os.path.join(current_app.config["UPLOAD_FOLDER"], image_filename)
+            file.save(upload_path)
+
+    if not note and not image_filename:
+        return jsonify({"error": "A resolution note or photo evidence is required.", "status_code": 400}), 400
+
+    complaint.resolution_note = note if note else "Field resolution completed."
+    if image_filename:
+        complaint.resolution_image_path = image_filename
+    complaint.resolution_submitted_at = datetime.now(timezone.utc)
+    complaint.status = STATUS_RESOLUTION_SUBMITTED
+
+    db.session.commit()
+
+    # SSE Event Dispatches
+    publish_complaint_event(
+        complaint.id,
+        EVENT_RESOLUTION_SUBMITTED,
+        {
+            "ticket_id": complaint.id,
+            "status": complaint.status,
+            "department": complaint.department,
+            "resolution_note": complaint.resolution_note,
+            "resolution_image_path": complaint.resolution_image_path,
+            "resolution_submitted_at": complaint.resolution_submitted_at.isoformat() if complaint.resolution_submitted_at else None,
+            "progress_message": f"Resolution evidence submitted by {complaint.department or 'Field Team'}.",
+        },
+        app=current_app._get_current_object(),
+    )
+    publish_complaint_event(
+        complaint.id,
+        EVENT_STATUS_CHANGED,
+        {
+            "status": complaint.status,
+            "processing_status": complaint.processing_status,
+            "stage": complaint.processing_status,
+            "department": complaint.department,
+            "severity": complaint.severity_level,
+            "progress_message": "Resolution evidence submitted for citizen review.",
+        },
+        app=current_app._get_current_object(),
+    )
+
+    # In-app notification to citizen owner
+    try:
+        trigger_resolution_submitted_notification(
+            complaint,
+            resolution_note=complaint.resolution_note,
+            app=current_app._get_current_object(),
+        )
+    except Exception as exc:
+        current_app.logger.warning("Failed to trigger resolution notification: %s", exc)
+
+    return jsonify({
+        "message": "Resolution evidence submitted successfully.",
+        "complaint": complaint.to_dict(),
+        "status_code": 200
+    }), 200
+
+
+@complaints_bp.route("/<ticket_id>/resolution", methods=["GET"])
+@login_required
+def get_resolution(ticket_id):
+    """
+    Retrieves field resolution evidence for a complaint.
+    Accessible by Admin or the Ticket Owner Citizen.
+    """
+    safe_id = str(ticket_id).strip()
+    if not safe_id or len(safe_id) > 16:
+        return jsonify({"error": "Invalid ticket ID format.", "status_code": 400}), 400
+
+    complaint = db.session.get(Complaint, safe_id)
+    if not complaint:
+        return jsonify({"error": "Ticket not found.", "status_code": 404}), 404
+
+    role = session.get("role")
+    user_id = session.get("user_id")
+    if role != "admin" and complaint.user_id != user_id:
+        return jsonify({
+            "error": "Access denied. You may only view resolution details for your own complaints.",
+            "status_code": 403
+        }), 403
+
+    return jsonify({
+        "ticket_id": complaint.id,
+        "status": complaint.status,
+        "department": complaint.department,
+        "resolution_note": complaint.resolution_note,
+        "resolution_image_path": complaint.resolution_image_path,
+        "resolution_submitted_at": complaint.resolution_submitted_at.isoformat() if complaint.resolution_submitted_at else None,
+        "resolved_at": complaint.resolved_at.isoformat() if complaint.resolved_at else None,
+        "status_code": 200,
+    }), 200
+
+
+@complaints_bp.route("/<ticket_id>/feedback", methods=["POST"])
+@login_required
+def submit_feedback(ticket_id):
+    """
+    Submits citizen feedback on a complaint's resolution.
+    Strictly restricted to the citizen owner of the complaint.
+    Result must be either 'CONFIRMED' or 'NEEDS_ATTENTION'.
+    """
+    safe_id = str(ticket_id).strip()
+    if not safe_id or len(safe_id) > 16:
+        return jsonify({"error": "Invalid ticket ID format.", "status_code": 400}), 400
+
+    complaint = db.session.get(Complaint, safe_id)
+    if not complaint:
+        return jsonify({"error": "Ticket not found.", "status_code": 404}), 404
+
+    role = session.get("role")
+    user_id = session.get("user_id")
+
+    # Only ticket owner can submit citizen feedback (prevent unauthorized citizen input)
+    if role != "admin" and complaint.user_id != user_id:
+        return jsonify({
+            "error": "Access denied. You may only submit feedback for your own complaints.",
+            "status_code": 403
+        }), 403
+
+    # Complaint must be in RESOLUTION_SUBMITTED or RESOLVED state
+    if complaint.status not in (STATUS_RESOLUTION_SUBMITTED, STATUS_RESOLVED):
+        return jsonify({
+            "error": f"Cannot submit feedback for ticket in status '{complaint.status}'. Ticket must be in RESOLUTION_SUBMITTED.",
+            "status_code": 400
+        }), 400
+
+    # Parse feedback result and comment
+    if request.is_json:
+        result = (request.json.get("result") or "").strip().upper()
+        comment = (request.json.get("comment") or "").strip()
+    else:
+        result = (request.form.get("result") or "").strip().upper()
+        comment = (request.form.get("comment") or "").strip()
+
+    if result not in ("CONFIRMED", "NEEDS_ATTENTION"):
+        return jsonify({
+            "error": "Invalid feedback result. Must be 'CONFIRMED' or 'NEEDS_ATTENTION'.",
+            "status_code": 400
+        }), 400
+
+    # Accidental duplicate prevention: throttle identical result within 60s
+    recent_cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
+    existing_recent = CitizenFeedback.query.filter(
+        CitizenFeedback.complaint_id == complaint.id,
+        CitizenFeedback.user_id == user_id,
+        CitizenFeedback.result == result,
+        CitizenFeedback.created_at >= recent_cutoff
+    ).first()
+    if existing_recent:
+        return jsonify({
+            "error": "Feedback was already submitted within the last 60 seconds. Duplicate submission prevented.",
+            "status_code": 409
+        }), 409
+
+    # Optional feedback evidence photo
+    fb_image_filename = None
+    if "image" in request.files:
+        file = request.files["image"]
+        if file and file.filename:
+            if not allowed_file(file.filename):
+                return jsonify({"error": "Unsupported file format for feedback image.", "status_code": 400}), 400
+            try:
+                img = Image.open(file.stream)
+                img.verify()
+                file.stream.seek(0)
+            except Exception:
+                return jsonify({"error": "Invalid or corrupted image file.", "status_code": 400}), 400
+            ext = file.filename.rsplit(".", 1)[1].lower()
+            fb_image_filename = f"feedback_{complaint.id}_{uuid.uuid4().hex[:8]}.{ext}"
+            upload_path = os.path.join(current_app.config["UPLOAD_FOLDER"], fb_image_filename)
+            file.save(upload_path)
+
+    # Create CitizenFeedback entry
+    fb = CitizenFeedback(
+        complaint_id=complaint.id,
+        user_id=user_id,
+        result=result,
+        comment=comment if comment else None,
+        image_path=fb_image_filename,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.session.add(fb)
+
+    # State machine transition
+    if result == "CONFIRMED":
+        complaint.status = STATUS_RESOLVED
+        complaint.resolved_at = datetime.now(timezone.utc)
+        event_action = EVENT_RESOLUTION_CONFIRMED
+        progress_msg = "Citizen confirmed resolution. Incident closed as RESOLVED."
+    else:
+        complaint.status = STATUS_IN_PROGRESS
+        event_action = EVENT_RESOLUTION_NEEDS_ATTENTION
+        progress_msg = "Citizen reported issue still needs attention. Returned to IN_PROGRESS."
+
+    db.session.commit()
+
+    fb_dict = fb.to_dict()
+
+    # Real-time SSE dispatches
+    publish_complaint_event(
+        complaint.id,
+        EVENT_CITIZEN_FEEDBACK,
+        {
+            "ticket_id": complaint.id,
+            "result": result,
+            "comment": comment,
+            "status": complaint.status,
+            "feedback": fb_dict,
+            "progress_message": progress_msg,
+        },
+        app=current_app._get_current_object(),
+    )
+    publish_complaint_event(
+        complaint.id,
+        event_action,
+        {
+            "ticket_id": complaint.id,
+            "result": result,
+            "status": complaint.status,
+            "progress_message": progress_msg,
+        },
+        app=current_app._get_current_object(),
+    )
+    publish_complaint_event(
+        complaint.id,
+        EVENT_STATUS_CHANGED,
+        {
+            "status": complaint.status,
+            "processing_status": complaint.processing_status,
+            "stage": complaint.processing_status,
+            "department": complaint.department,
+            "severity": complaint.severity_level,
+            "progress_message": progress_msg,
+        },
+        app=current_app._get_current_object(),
+    )
+
+    # Trigger admin operational notification
+    try:
+        trigger_citizen_feedback_notification(complaint, fb, app=current_app._get_current_object())
+    except Exception as exc:
+        current_app.logger.warning("Failed to trigger feedback notification: %s", exc)
+
+    return jsonify({
+        "message": "Citizen feedback recorded successfully.",
+        "feedback": fb_dict,
+        "complaint": complaint.to_dict(),
+        "status_code": 201,
+    }), 201
+
+
+@complaints_bp.route("/<ticket_id>/feedback", methods=["GET"])
+@login_required
+def get_feedback(ticket_id):
+    """
+    Retrieves feedback history for a complaint.
+    Accessible by Admin or the Ticket Owner Citizen.
+    """
+    safe_id = str(ticket_id).strip()
+    if not safe_id or len(safe_id) > 16:
+        return jsonify({"error": "Invalid ticket ID format.", "status_code": 400}), 400
+
+    complaint = db.session.get(Complaint, safe_id)
+    if not complaint:
+        return jsonify({"error": "Ticket not found.", "status_code": 404}), 404
+
+    role = session.get("role")
+    user_id = session.get("user_id")
+    if role != "admin" and complaint.user_id != user_id:
+        return jsonify({
+            "error": "Access denied. You may only view feedback for your own complaints.",
+            "status_code": 403
+        }), 403
+
+    feedbacks = (
+        CitizenFeedback.query.filter_by(complaint_id=complaint.id)
+        .order_by(CitizenFeedback.created_at.desc())
+        .all()
+    )
+    return jsonify({
+        "ticket_id": complaint.id,
+        "feedback": [f.to_dict() for f in feedbacks],
+        "total": len(feedbacks),
+        "status_code": 200,
+    }), 200
 
 
 @complaints_bp.route("/<ticket_id>/events", methods=["GET"])
