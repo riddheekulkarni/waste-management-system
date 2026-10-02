@@ -302,7 +302,35 @@ def process_complaint_job(complaint_id: str, app=None) -> bool:
                 },
                 app=app,
             )
+
+            # ── Operational Alert Rules (Pillar 3) ──────────────────────────
+            try:
+                from notifications import (
+                    trigger_high_severity_rule,
+                    trigger_duplicate_rule,
+                    create_notification,
+                    CATEGORY_STATUS_CHANGED,
+                )
+                if complaint.severity_level == "High":
+                    trigger_high_severity_rule(complaint, app=app)
+                if complaint.is_duplicate and complaint.duplicate_of_id:
+                    trigger_duplicate_rule(complaint, complaint.duplicate_of_id, app=app)
+                if complaint.user_id:
+                    create_notification(
+                        category=CATEGORY_STATUS_CHANGED,
+                        title=f"Report #{complaint.id} Verified",
+                        message=f"Your report #{complaint.id} has been verified and routed to {complaint.department}.",
+                        ticket_id=complaint.id,
+                        user_id=complaint.user_id,
+                        severity=complaint.severity_level,
+                        department=complaint.department,
+                        app=app,
+                    )
+            except Exception as rule_exc:
+                logger.debug("Operational notification rule check failed: %s", rule_exc)
+
             return True
+
 
         except Exception as exc:
             # ── 9. Safe Failure Handling ─────────────────────────────────────
@@ -340,4 +368,11 @@ def process_complaint_job(complaint_id: str, app=None) -> bool:
                     app=app,
                 )
 
+                try:
+                    from notifications import trigger_ai_failure_rule
+                    trigger_ai_failure_rule(complaint, error_msg=complaint.processing_error, app=app)
+                except Exception as notif_err:
+                    logger.debug("AI failure notification failed: %s", notif_err)
+
             return False
+

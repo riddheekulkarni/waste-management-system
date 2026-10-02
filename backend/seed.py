@@ -67,6 +67,166 @@ def seed_database(app=None):
             print("  ℹ️  Demo citizen user already exists.")
 
         db.session.commit()
+
+        # Seed sample complaints if table is empty
+        if Complaint.query.count() == 0:
+            from datetime import datetime, timedelta, timezone
+            from models import Notification
+
+            now = datetime.now(timezone.utc)
+            sample_complaints = [
+                Complaint(
+                    id="ECC1001",
+                    user_id=citizen.id,
+                    address="Shivajinagar Bus Station, Pune",
+                    latitude=18.5314,
+                    longitude=73.8446,
+                    severity_level="High",
+                    coverage_ratio=0.45,
+                    item_count=6,
+                    department="Sanitation Department",
+                    status="IN_PROGRESS",
+                    ai_mode="REAL_YOLO",
+                    processing_status="COMPLETED",
+                    created_at=now - timedelta(hours=8),
+                    processing_started_at=now - timedelta(hours=7, minutes=59),
+                    processing_completed_at=now - timedelta(hours=7, minutes=58),
+                ),
+                Complaint(
+                    id="ECC1002",
+                    user_id=citizen.id,
+                    address="FC Road Market, Pune",
+                    latitude=18.5246,
+                    longitude=73.8415,
+                    severity_level="Medium",
+                    coverage_ratio=0.22,
+                    item_count=4,
+                    department="Recycling Department",
+                    status="VERIFIED",
+                    ai_mode="REAL_YOLO",
+                    processing_status="COMPLETED",
+                    created_at=now - timedelta(hours=14),
+                    processing_started_at=now - timedelta(hours=13, minutes=59),
+                    processing_completed_at=now - timedelta(hours=13, minutes=58),
+                ),
+                Complaint(
+                    id="ECC1003",
+                    user_id=citizen.id,
+                    address="Kothrud Industrial Area, Pune",
+                    latitude=18.5074,
+                    longitude=73.8077,
+                    severity_level="High",
+                    coverage_ratio=0.55,
+                    item_count=8,
+                    department="Health & Hazmat Department",
+                    status="VERIFIED",
+                    ai_mode="MOCK_DEMO",
+                    processing_status="COMPLETED",
+                    created_at=now - timedelta(hours=18),
+                    processing_started_at=now - timedelta(hours=17, minutes=59),
+                    processing_completed_at=now - timedelta(hours=17, minutes=58),
+                ),
+                Complaint(
+                    id="ECC1004",
+                    user_id=citizen.id,
+                    address="JM Road Corner, Pune",
+                    latitude=18.5204,
+                    longitude=73.8567,
+                    severity_level="Low",
+                    coverage_ratio=0.10,
+                    item_count=2,
+                    department="Public Works Department",
+                    status="RESOLVED",
+                    ai_mode="REAL_YOLO",
+                    processing_status="COMPLETED",
+                    created_at=now - timedelta(days=2),
+                    processing_started_at=now - timedelta(days=2, minutes=-1),
+                    processing_completed_at=now - timedelta(days=2, minutes=-2),
+                ),
+                Complaint(
+                    id="ECC1005",
+                    user_id=citizen.id,
+                    address="Deccan Gymkhana, Pune",
+                    latitude=18.5173,
+                    longitude=73.8418,
+                    severity_level="High",
+                    coverage_ratio=0.38,
+                    item_count=5,
+                    department=None,
+                    status="VERIFIED",
+                    ai_mode="REAL_YOLO",
+                    processing_status="COMPLETED",
+                    created_at=now - timedelta(hours=16),
+                ),
+                Complaint(
+                    id="ECC1006",
+                    user_id=citizen.id,
+                    address="JM Road Corner (Recurring), Pune",
+                    latitude=18.5205,
+                    longitude=73.8568,
+                    severity_level="Medium",
+                    coverage_ratio=0.25,
+                    item_count=3,
+                    department="Sanitation Department",
+                    status="IN_PROGRESS",
+                    ai_mode="REAL_YOLO",
+                    processing_status="COMPLETED",
+                    created_at=now - timedelta(hours=4),
+                ),
+            ]
+
+            for c in sample_complaints:
+                db.session.add(c)
+                det = DetectionItem(
+                    complaint_id=c.id,
+                    cls="plastic_bottle",
+                    confidence=0.88,
+                    x1=10,
+                    y1=10,
+                    x2=100,
+                    y2=100,
+                )
+                db.session.add(det)
+
+            # Sample notifications
+            sample_notifs = [
+                Notification(
+                    category="NEW_HIGH_SEVERITY",
+                    title="Critical Hazmat Incident Reported",
+                    message="High-severity hazardous waste detected at Kothrud Industrial Area (Ticket #ECC1003).",
+                    ticket_id="ECC1003",
+                    severity="High",
+                    department="Health & Hazmat Department",
+                    is_read=False,
+                    created_at=now - timedelta(hours=17),
+                ),
+                Notification(
+                    category="UNASSIGNED_REPORT",
+                    title="Operational Age Warning: Unassigned Ticket",
+                    message="Ticket #ECC1005 at Deccan Gymkhana has been verified for 16h without department allocation.",
+                    ticket_id="ECC1005",
+                    severity="High",
+                    is_read=False,
+                    created_at=now - timedelta(hours=4),
+                ),
+                Notification(
+                    user_id=citizen.id,
+                    category="STATUS_CHANGED",
+                    title="Report #ECC1001 Verified & In Progress",
+                    message="Your report for Shivajinagar Bus Station has been verified and assigned to the Sanitation Department.",
+                    ticket_id="ECC1001",
+                    severity="High",
+                    department="Sanitation Department",
+                    is_read=False,
+                    created_at=now - timedelta(hours=7),
+                ),
+            ]
+            for n in sample_notifs:
+                db.session.add(n)
+
+            db.session.commit()
+            print("  ✅ Seeded 6 realistic demonstration complaints and 3 operational notifications.")
+
         print(f"✨ Seeding complete. {created_count} new demo user(s) created.")
         print("⚠️  REMINDER: These demo credentials must not be deployed to public or production servers.\n")
         return True

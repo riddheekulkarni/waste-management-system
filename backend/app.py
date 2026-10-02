@@ -11,6 +11,7 @@ from routes.admin import admin_bp
 from routes.analytics import analytics_bp
 from routes.auth import auth_bp
 from routes.complaints import complaints_bp
+from routes.notifications import notifications_bp
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 
@@ -45,6 +46,7 @@ def create_app():
     app.register_blueprint(complaints_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(notifications_bp)
 
     # ── CLI Commands ───────────────────────────────────────────────────────
     @app.cli.command("seed-db")

@@ -57,12 +57,17 @@
           <span>📸</span> Report an Issue
         </button>
 
+        <button class="btn btn-outline btn-sm hidden" id="citizen-notif-btn" type="button" aria-label="Notifications" title="Notifications" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+          🔔 <span class="badge-count badge-count-warn hidden" id="citizen-notif-badge">0</span>
+        </button>
+
         <div class="user-auth-bar" id="user-auth-bar">
           <button class="btn btn-outline btn-sm" id="open-auth-btn" type="button">
             <span>🔑</span> Sign In
           </button>
         </div>
       </div>
+
     </div>
   </header>
 
@@ -612,6 +617,9 @@
           </div>
           <div class="admin-top-actions">
             <span id="admin-user-display" class="admin-user-tag">Admin: System Operator</span>
+            <button class="btn btn-sm btn-outline" id="admin-notif-bell-btn" type="button" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+              🔔 Alerts <span class="badge-count badge-count-warn hidden" id="admin-notif-badge">0</span>
+            </button>
             <button class="btn btn-sm btn-outline" id="admin-refresh-all-btn" type="button">🔄 Refresh Data</button>
           </div>
         </div>
@@ -630,6 +638,9 @@
           <button class="admin-nav-btn" data-admin-view="map" id="admin-btn-map" type="button">
             <span>🗺️</span> Live Incident Map
           </button>
+          <button class="admin-nav-btn" data-admin-view="insights" id="admin-btn-insights" type="button">
+            <span>💡</span> Operational Insights
+          </button>
           <button class="admin-nav-btn" data-admin-view="departments" id="admin-btn-departments" type="button">
             <span>🏛️</span> Departments
           </button>
@@ -643,6 +654,7 @@
             <span>⚙️</span> System Health
           </button>
         </nav>
+
 
         <!-- 1. OVERVIEW VIEW PANE -->
         <div class="admin-view-pane" id="admin-view-overview">
@@ -747,7 +759,51 @@
               </div>
             </div>
           </div>
+
+          <!-- CIVIC INTELLIGENCE & SPATIAL SUMMARY (PHASE 7) -->
+          <div class="overview-intelligence-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.25rem;">
+            <div class="civic-card" style="padding: 1rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                <h4 style="font-size: 0.95rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 0.4rem;">
+                  <span>🌐</span> Civic Intelligence Summary
+                </h4>
+                <span class="live-indicator"><span class="pulse-dot"></span> UPDATED</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; text-align: center;">
+                <div style="background: var(--bg-surface-elevated); padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                  <div style="font-size: 1.25rem; font-weight: 800; color: #38bdf8;" id="adm-ci-active">0</div>
+                  <div style="font-size: 0.72rem; color: var(--text-muted);">Active Workload</div>
+                </div>
+                <div style="background: var(--bg-surface-elevated); padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                  <div style="font-size: 1.25rem; font-weight: 800; color: var(--civic-amber);" id="adm-ci-aging">0</div>
+                  <div style="font-size: 0.72rem; color: var(--text-muted);">Aging Unassigned (>12h)</div>
+                </div>
+                <div style="background: var(--bg-surface-elevated); padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                  <div style="font-size: 1.25rem; font-weight: 800; color: var(--civic-red);" id="adm-ci-unread">0</div>
+                  <div style="font-size: 0.72rem; color: var(--text-muted);">Unread Alerts</div>
+                </div>
+              </div>
+              <div id="adm-ci-insights-list" style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.35rem;">
+                <div>Evidence-based municipal signals loading...</div>
+              </div>
+            </div>
+
+            <div class="civic-card" style="padding: 1rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                <h4 style="font-size: 0.95rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 0.4rem;">
+                  <span>📍</span> Spatial & Department Summary
+                </h4>
+                <button class="btn btn-sm btn-secondary" onclick="switchAdminView('map')" type="button" style="padding: 2px 8px; font-size: 0.75rem;">
+                  View Live Map →
+                </button>
+              </div>
+              <div id="adm-spatial-summary-content" style="font-size: 0.82rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                <div style="color: var(--text-muted);">Aggregating observed geographic incident concentrations...</div>
+              </div>
+            </div>
+          </div>
         </div>
+
 
         <!-- 2. COMPLAINTS OPERATIONS QUEUE PANE -->
         <div class="admin-view-pane hidden" id="admin-view-complaints">
@@ -885,35 +941,104 @@
           </div>
         </div>
 
-        <!-- 4. LIVE INCIDENT MAP PANE -->
+        <!-- 4. LIVE INCIDENT MAP PANE (PHASE 7 UPGRADE) -->
         <div class="admin-view-pane hidden" id="admin-view-map">
           <div class="civic-card" style="padding: 1rem;">
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.85rem;">
               <div>
-                <h3 style="font-size: 1.05rem; font-weight: 700;">Municipal Incident Geographic Command Map</h3>
-                <span id="admin-map-count" style="font-size: 0.8rem; color: var(--text-secondary);">Plotting geolocated incidents...</span>
+                <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.15rem;">Live Civic Intelligence Operations Map</h3>
+                <span id="admin-map-count" style="font-size: 0.8rem; color: var(--text-secondary);">Plotting city-level operational intelligence...</span>
               </div>
               <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                <select id="admin-map-filter-dept" style="padding: 0.35rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.85rem;">
+                <button class="btn btn-secondary btn-sm" id="admin-map-reload-btn" type="button">🔄 Refresh Data</button>
+              </div>
+            </div>
+
+            <!-- COMPREHENSIVE MULTI-FILTER BAR -->
+            <div class="admin-map-filter-strip" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; background: var(--bg-surface-elevated); padding: 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <label style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700;">TIME WINDOW</label>
+                <select id="admin-map-filter-days" style="padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.8rem;">
+                  <option value="7">Last 7 Days</option>
+                  <option value="30">Last 30 Days</option>
+                  <option value="90">Last 90 Days</option>
+                  <option value="">All Observed Time</option>
+                </select>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <label style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700;">SEVERITY</label>
+                <select id="admin-map-filter-sev" style="padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.8rem;">
+                  <option value="">All Severities</option>
+                  <option value="High">High Severity Only</option>
+                  <option value="Medium">Medium Severity</option>
+                  <option value="Low">Low Severity</option>
+                </select>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <label style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700;">STATUS</label>
+                <select id="admin-map-filter-status" style="padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.8rem;">
+                  <option value="">All Statuses</option>
+                  <option value="VERIFIED">VERIFIED (Triage)</option>
+                  <option value="IN_PROGRESS">IN_PROGRESS</option>
+                  <option value="RESOLVED">RESOLVED</option>
+                  <option value="PROCESSING_FAILED">PROCESSING_FAILED</option>
+                  <option value="DUPLICATE">DUPLICATE</option>
+                </select>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <label style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700;">DEPARTMENT</label>
+                <select id="admin-map-filter-dept" style="padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.8rem;">
                   <option value="">All Departments</option>
                   <option value="Sanitation Department">Sanitation</option>
                   <option value="Recycling Department">Recycling</option>
                   <option value="Health & Hazmat Department">Health & Hazmat</option>
                   <option value="Public Works Department">Public Works</option>
                 </select>
-                <select id="admin-map-filter-sev" style="padding: 0.35rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.85rem;">
-                  <option value="">All Severities</option>
-                  <option value="High">High Severity Only</option>
-                  <option value="Medium">Medium Severity</option>
-                  <option value="Low">Low Severity</option>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <label style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700;">AI MODE</label>
+                <select id="admin-map-filter-aimode" style="padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.8rem;">
+                  <option value="">All Modes</option>
+                  <option value="REAL_YOLO">REAL_YOLO</option>
+                  <option value="MOCK_DEMO">MOCK_DEMO</option>
                 </select>
-                <button class="btn btn-secondary btn-sm" id="admin-map-reload-btn" type="button">🔄 Refresh Pins</button>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <label style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700;">DETECTED CATEGORY</label>
+                <select id="admin-map-filter-category" style="padding: 0.3rem 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.8rem;">
+                  <option value="">All Waste Classes</option>
+                  <option value="plastic_bottle">Plastic Bottles</option>
+                  <option value="cardboard">Cardboard</option>
+                  <option value="organic_waste">Organic Waste</option>
+                  <option value="aluminum_can">Aluminum / Metal</option>
+                  <option value="glass_bottle">Glass</option>
+                  <option value="hazardous_materials">Hazardous</option>
+                  <option value="electronic_waste">E-Waste</option>
+                </select>
               </div>
             </div>
 
-            <div id="admin-ops-map" class="interactive-map" style="height: 580px; width: 100%; border-radius: var(--radius-sm);"></div>
+            <!-- OPERATIONAL LAYER SWITCHER -->
+            <div class="map-layer-selector" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
+                <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-right: 0.25rem;">OPERATIONAL LAYERS:</span>
+                <button class="layer-pill-btn active" data-layer="incidents" type="button" id="layer-btn-incidents">📍 Layer A: Incidents</button>
+                <button class="layer-pill-btn" data-layer="concentration" type="button" id="layer-btn-concentration">🔥 Layer B: Incident Concentration</button>
+                <button class="layer-pill-btn" data-layer="departments" type="button" id="layer-btn-departments">🏛️ Layer C: Department Workload</button>
+                <button class="layer-pill-btn" data-layer="resolution" type="button" id="layer-btn-resolution">✅ Layer D: Resolution Activity</button>
+              </div>
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">*Concentrations represent observed historical incident density.</span>
+            </div>
+
+            <div id="admin-ops-map" class="interactive-map" style="height: 560px; width: 100%; border-radius: var(--radius-sm);"></div>
           </div>
         </div>
+
 
         <!-- 5. DEPARTMENTS VIEW PANE -->
         <div class="admin-view-pane hidden" id="admin-view-departments">
@@ -1005,7 +1130,184 @@
           </div>
         </div>
 
+        <!-- 9. OPERATIONAL INSIGHTS VIEW PANE (PHASE 7) -->
+        <div class="admin-view-pane hidden" id="admin-view-insights">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+            <div>
+              <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 0.25rem;">Municipal Operational Insights & Civic Trends</h3>
+              <p style="font-size: 0.85rem; color: var(--text-secondary);">Evidence-based municipal performance indicators comparing operational windows.</p>
+            </div>
+            <div class="insights-time-pills">
+              <button class="insights-pill-btn active" data-days="7" type="button">7 Days</button>
+              <button class="insights-pill-btn" data-days="30" type="button">30 Days</button>
+              <button class="insights-pill-btn" data-days="90" type="button">90 Days</button>
+            </div>
+          </div>
+
+          <!-- SECTION 1: CIVIC TRENDS & COMPARISONS -->
+          <div style="margin-bottom: 1.5rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.65rem;">
+              <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0;">
+                📈 Civic Inflow & Resolution Trends (vs Previous Equivalent Period)
+              </h4>
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Comparing current period with preceding cycle</span>
+            </div>
+            <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+              <div class="stat-card">
+                <div class="stat-icon icon-blue">📥</div>
+                <div class="stat-info">
+                  <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                    <span class="stat-number" id="ins-val-volume">0</span>
+                    <span class="badge" id="ins-delta-volume">+0%</span>
+                  </div>
+                  <label class="stat-label">Incident Inflow Volume</label>
+                  <span style="font-size: 0.72rem; color: var(--text-muted);" id="ins-prev-volume">Prev: 0</span>
+                </div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-icon icon-red">🚨</div>
+                <div class="stat-info">
+                  <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                    <span class="stat-number" id="ins-val-high">0</span>
+                    <span class="badge" id="ins-delta-high">+0%</span>
+                  </div>
+                  <label class="stat-label">High-Severity Incidents</label>
+                  <span style="font-size: 0.72rem; color: var(--text-muted);" id="ins-prev-high">Prev: 0</span>
+                </div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-icon icon-green">✅</div>
+                <div class="stat-info">
+                  <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                    <span class="stat-number" id="ins-val-resolved">0</span>
+                    <span class="badge" id="ins-delta-resolved">+0%</span>
+                  </div>
+                  <label class="stat-label">Resolved Complaints</label>
+                  <span style="font-size: 0.72rem; color: var(--text-muted);" id="ins-prev-resolved">Prev: 0</span>
+                </div>
+              </div>
+
+              <div class="stat-card">
+                <div class="stat-icon icon-amber">🎯</div>
+                <div class="stat-info">
+                  <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                    <span class="stat-number" id="ins-val-rate">0%</span>
+                    <span class="badge" id="ins-delta-rate">Rate</span>
+                  </div>
+                  <label class="stat-label">Resolution Rate</label>
+                  <span style="font-size: 0.72rem; color: var(--text-muted);" id="ins-prev-rate">Prev: 0%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION 2: WORKLOAD & OPERATIONAL AGE THRESHOLD MONITORING -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.5rem;" class="insights-dual-grid">
+            <div class="civic-card" style="padding: 1.25rem;">
+              <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                <span>⏱️</span> Operational Age Threshold Monitoring
+              </h4>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                Internal municipal age guidelines for identifying tickets requiring urgent dispatcher attention.
+              </p>
+              <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface-elevated); padding: 0.65rem 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                  <div>
+                    <strong style="font-size: 0.85rem;">Unassigned Tickets (&gt;12h threshold)</strong>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Verified complaints awaiting department allocation</div>
+                  </div>
+                  <span class="badge badge-failed" id="ins-age-unassigned" style="font-size: 0.85rem;">0</span>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface-elevated); padding: 0.65rem 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                  <div>
+                    <strong style="font-size: 0.85rem;">Active High Severity (&gt;6h threshold)</strong>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Critical safety incidents still unresolved</div>
+                  </div>
+                  <span class="badge badge-failed" id="ins-age-highsev" style="font-size: 0.85rem;">0</span>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface-elevated); padding: 0.65rem 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                  <div>
+                    <strong style="font-size: 0.85rem;">Aging New Reports (&gt;24h threshold)</strong>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Total pending reports submitted &gt;24h ago</div>
+                  </div>
+                  <span class="badge badge-progress" id="ins-age-new" style="font-size: 0.85rem;">0</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="civic-card" style="padding: 1.25rem;">
+              <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                <span>🚀</span> Resolution Performance Milestones
+              </h4>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                Measured durations across lifecycle phases. Displays &ldquo;Insufficient data&rdquo; when timestamps are unavailable.
+              </p>
+              <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <div style="background: var(--bg-surface-elevated); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                    <span style="font-size: 0.85rem; font-weight: 700;">SUBMITTED → VERIFIED (AI Triage)</span>
+                    <span id="ins-perf-sv-status" class="badge badge-resolved">Available</span>
+                  </div>
+                  <div style="display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                    <div>Average: <strong id="ins-perf-sv-avg" style="color: var(--text-primary);">--</strong></div>
+                    <div>Median: <strong id="ins-perf-sv-med" style="color: var(--text-primary);">--</strong></div>
+                    <div>Cases: <strong id="ins-perf-sv-cases" style="color: var(--text-primary);">0</strong></div>
+                  </div>
+                </div>
+
+                <div style="background: var(--bg-surface-elevated); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                    <span style="font-size: 0.85rem; font-weight: 700;">AI Vision Inference Reliability</span>
+                    <span id="ins-ai-success-rate" class="badge badge-resolved">100%</span>
+                  </div>
+                  <div style="display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.35rem;">
+                    <div>Failures: <strong id="ins-ai-failed" style="color: var(--text-primary);">0</strong></div>
+                    <div>Retries: <strong id="ins-ai-retries" style="color: var(--text-primary);">0</strong></div>
+                    <div>YOLOv8: <strong id="ins-ai-yolo" style="color: var(--text-primary);">0</strong></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION 3: RECURRING REPORT CONCENTRATIONS -->
+          <div class="civic-card" style="padding: 1.25rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <div>
+                <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.4rem;">
+                  <span>🔄</span> Recurring Report Concentrations
+                </h4>
+                <p style="font-size: 0.8rem; color: var(--text-secondary);">
+                  Areas with repeated incident submissions identified via spatial clustering (&le;50m). Labeled strictly as observed recurring report concentrations.
+                </p>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Recurring Incident Area</th>
+                    <th>Observed Coordinates</th>
+                    <th>Report Count</th>
+                    <th>Active vs Resolved</th>
+                    <th>Departments Involved</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="ins-recurring-tbody">
+                  <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Scanning spatial clusters...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
       </div>
+
     </section>
 
   </main>
@@ -1113,7 +1415,79 @@
     </div>
   </div>
 
-  <!-- APP FOOTER -->
+  <!-- ====================================================================
+
+       ADMIN OPERATIONAL NOTIFICATIONS CENTER MODAL (PHASE 7)
+       ==================================================================== -->
+  <div class="modal-overlay hidden" id="admin-notif-modal" role="dialog" aria-modal="true" aria-labelledby="admin-notif-title">
+    <div class="modal-card" style="max-width: 680px; width: 95%; max-height: 85vh; display: flex; flex-direction: column;">
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span style="font-size: 1.25rem;">🔔</span>
+          <div>
+            <h3 id="admin-notif-title" style="font-size: 1.1rem; margin: 0;">Municipal Operational Alerts</h3>
+            <span id="admin-notif-unread-sub" style="font-size: 0.78rem; color: var(--text-secondary);">Real-time dispatch and intelligence notifications</span>
+          </div>
+        </div>
+        <button class="modal-close" id="close-admin-notif-modal" type="button" aria-label="Close notifications">✕</button>
+      </div>
+
+      <!-- FILTER & BULK ACTIONS -->
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <select id="admin-notif-filter-cat" style="padding: 0.3rem 0.55rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.8rem;">
+            <option value="">All Alert Categories</option>
+            <option value="NEW_HIGH_SEVERITY">NEW_HIGH_SEVERITY</option>
+            <option value="AI_PROCESSING_FAILED">AI_PROCESSING_FAILED</option>
+            <option value="DUPLICATE_DETECTED">DUPLICATE_DETECTED</option>
+            <option value="UNASSIGNED_REPORT">UNASSIGNED_REPORT</option>
+            <option value="SLA_WARNING">SLA_WARNING (Operational Age)</option>
+          </select>
+          <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 0.25rem; color: var(--text-secondary);">
+            <input type="checkbox" id="admin-notif-unread-toggle" /> Unread Only
+          </label>
+        </div>
+        <button class="btn btn-sm btn-secondary" id="admin-notif-read-all-btn" type="button" style="font-size: 0.78rem;">
+          ✓ Mark All as Read
+        </button>
+      </div>
+
+      <!-- NOTIFICATIONS SCROLLABLE LIST -->
+      <div id="admin-notif-list-container" style="overflow-y: auto; max-height: 55vh; padding: 0.5rem 0; display: flex; flex-direction: column; gap: 0.5rem;">
+        <div style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading operational alerts...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       CITIZEN NOTIFICATIONS DRAWER MODAL (PHASE 7)
+       ==================================================================== -->
+  <div class="modal-overlay hidden" id="citizen-notif-modal" role="dialog" aria-modal="true" aria-labelledby="citizen-notif-title">
+    <div class="modal-card" style="max-width: 540px; width: 95%; max-height: 80vh; display: flex; flex-direction: column;">
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span style="font-size: 1.25rem;">🔔</span>
+          <div>
+            <h3 id="citizen-notif-title" style="font-size: 1.1rem; margin: 0;">My Civic Notifications</h3>
+            <span id="citizen-notif-sub" style="font-size: 0.78rem; color: var(--text-secondary);">Live updates for your submitted reports</span>
+          </div>
+        </div>
+        <button class="modal-close" id="close-citizen-notif-modal" type="button" aria-label="Close notifications">✕</button>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color);">
+        <button class="btn btn-sm btn-secondary" id="citizen-notif-read-all-btn" type="button" style="font-size: 0.78rem;">
+          ✓ Mark All as Read
+        </button>
+      </div>
+
+      <!-- CITIZEN NOTIFICATIONS LIST -->
+      <div id="citizen-notif-list-container" style="overflow-y: auto; max-height: 55vh; padding: 0.5rem 0; display: flex; flex-direction: column; gap: 0.5rem;">
+        <div style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading your notifications...</div>
+      </div>
+    </div>
+  </div>
+
   <footer class="app-footer">
     <div class="container footer-grid">
       <div class="footer-brand">

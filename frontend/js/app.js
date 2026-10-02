@@ -142,6 +142,23 @@ function setupNavigation() {
       switchToTab(tabId);
     });
   });
+
+  // Citizen Notification Center controls
+  const citizenNotifBtn = document.getElementById("citizen-notif-btn");
+  if (citizenNotifBtn) {
+    citizenNotifBtn.addEventListener("click", () => {
+      openModal("citizen-notif-modal");
+      loadCitizenNotifications();
+    });
+  }
+  const closeCitizenNotifModal = document.getElementById("close-citizen-notif-modal");
+  if (closeCitizenNotifModal) {
+    closeCitizenNotifModal.addEventListener("click", () => closeModal("citizen-notif-modal"));
+  }
+  const citizenReadAllBtn = document.getElementById("citizen-notif-read-all-btn");
+  if (citizenReadAllBtn) {
+    citizenReadAllBtn.addEventListener("click", markAllCitizenNotificationsRead);
+  }
 }
 
 function switchToTab(tabId) {
@@ -214,6 +231,15 @@ function updateUserAuthUI() {
     }
 
     if (myComplaintsGroup) myComplaintsGroup.classList.remove("hidden");
+    const citizenNotifBtn = document.getElementById("citizen-notif-btn");
+    if (citizenNotifBtn) {
+      citizenNotifBtn.classList.remove("hidden");
+      if (currentUser.role === "citizen") loadCitizenNotifications();
+      else if (currentUser.role === "admin") {
+        loadCitizenNotifications();
+        loadAdminNotifications();
+      }
+    }
   } else {
     authBar.innerHTML = `
       <button class="btn btn-outline btn-sm" id="open-auth-btn" type="button">
@@ -227,6 +253,8 @@ function updateUserAuthUI() {
     adminLockedView.classList.remove("hidden");
     adminUnlockedView.classList.add("hidden");
     if (myComplaintsGroup) myComplaintsGroup.classList.add("hidden");
+    const citizenNotifBtn = document.getElementById("citizen-notif-btn");
+    if (citizenNotifBtn) citizenNotifBtn.classList.add("hidden");
   }
 }
 
@@ -1107,6 +1135,13 @@ function startRealtimeSSE(complaintData) {
       eventSource.addEventListener("processing_failed", (e) => {
         try { handleEventMessage(JSON.parse(e.data)); } catch (_) {}
       });
+      eventSource.addEventListener("notification_created", (e) => {
+        try {
+          const n = JSON.parse(e.data);
+          showToast(`🔔 ${n.title || 'Notification'}: ${n.message || ''}`, "info", 5000);
+          loadCitizenNotifications();
+        } catch (_) {}
+      });
 
       eventSource.onerror = () => {
         if (eventSource) {
@@ -1419,6 +1454,21 @@ let adminComplaintsTotalPages = 1;
 let adminOpsMap = null;
 let adminOpsMarkers = [];
 let adminAnalyticsDays = 7;
+let adminInsightsDays = 7;
+let adminMapLayers = {
+  incidents: true,
+  concentration: false,
+  departments: false,
+  resolution: false,
+};
+let adminMapLayerGroups = {
+  incidents: null,
+  concentration: null,
+  departments: null,
+  resolution: null,
+};
+let adminNotificationsData = [];
+let citizenNotificationsData = [];
 let adminSSE = null;
 let chartTimeline = null;
 let chartSeverity = null;
@@ -1445,6 +1495,7 @@ function setupAdminDashboard() {
       else if (adminActiveView === "map") loadAdminIncidentMap();
       else if (adminActiveView === "departments") loadAdminDepartments();
       else if (adminActiveView === "analytics") loadAdminAnalytics();
+      else if (adminActiveView === "insights") loadAdminInsights(adminInsightsDays);
       else if (adminActiveView === "users") loadAdminUsers();
       else if (adminActiveView === "system") loadAdminSystemHealth();
       showToast("Municipal Operations Center refreshed.", "info", 2000);
@@ -1500,13 +1551,57 @@ function setupAdminDashboard() {
   const procRefresh = document.getElementById("admin-refresh-proc-btn");
   if (procRefresh) procRefresh.addEventListener("click", loadAdminProcessingQueue);
 
-  // Map controls
-  const mapDept = document.getElementById("admin-map-filter-dept");
-  const mapSev = document.getElementById("admin-map-filter-sev");
+  // Map controls & filters
+  ["admin-map-filter-days", "admin-map-filter-sev", "admin-map-filter-status", "admin-map-filter-dept", "admin-map-filter-aimode", "admin-map-filter-category"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", loadAdminIncidentMap);
+  });
   const mapReload = document.getElementById("admin-map-reload-btn");
-  if (mapDept) mapDept.addEventListener("change", loadAdminIncidentMap);
-  if (mapSev) mapSev.addEventListener("change", loadAdminIncidentMap);
   if (mapReload) mapReload.addEventListener("click", loadAdminIncidentMap);
+
+  // Operational layer pills
+  document.querySelectorAll(".layer-pill-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const layer = btn.dataset.layer;
+      if (layer && adminMapLayers.hasOwnProperty(layer)) {
+        adminMapLayers[layer] = !adminMapLayers[layer];
+        btn.classList.toggle("active", adminMapLayers[layer]);
+        updateAdminMapLayersVisibility();
+      }
+    });
+  });
+
+  // Insights time pills
+  const insPills = document.querySelectorAll(".insights-pill-btn");
+  insPills.forEach(pill => {
+    pill.addEventListener("click", () => {
+      insPills.forEach(p => p.classList.remove("active"));
+      pill.classList.add("active");
+      adminInsightsDays = parseInt(pill.dataset.days, 10) || 7;
+      loadAdminInsights(adminInsightsDays);
+    });
+  });
+
+  // Admin Notification Center controls
+  const adminNotifBell = document.getElementById("admin-notif-bell-btn");
+  if (adminNotifBell) {
+    adminNotifBell.addEventListener("click", () => {
+      openModal("admin-notif-modal");
+      loadAdminNotifications();
+    });
+  }
+  const closeAdminNotifModal = document.getElementById("close-admin-notif-modal");
+  if (closeAdminNotifModal) {
+    closeAdminNotifModal.addEventListener("click", () => closeModal("admin-notif-modal"));
+  }
+  const adminReadAllBtn = document.getElementById("admin-notif-read-all-btn");
+  if (adminReadAllBtn) {
+    adminReadAllBtn.addEventListener("click", markAllAdminNotificationsRead);
+  }
+  const adminNotifCat = document.getElementById("admin-notif-filter-cat");
+  if (adminNotifCat) adminNotifCat.addEventListener("change", renderAdminNotifications);
+  const adminNotifUnread = document.getElementById("admin-notif-unread-toggle");
+  if (adminNotifUnread) adminNotifUnread.addEventListener("change", renderAdminNotifications);
 
   // Analytics time pills
   const timePills = document.querySelectorAll(".time-pill-btn");
@@ -1550,6 +1645,7 @@ function switchAdminView(viewId) {
   else if (viewId === "map") loadAdminIncidentMap();
   else if (viewId === "departments") loadAdminDepartments();
   else if (viewId === "analytics") loadAdminAnalytics();
+  else if (viewId === "insights") loadAdminInsights(adminInsightsDays);
   else if (viewId === "users") loadAdminUsers();
   else if (viewId === "system") loadAdminSystemHealth();
 }
@@ -1634,6 +1730,86 @@ async function loadAdminOverview() {
         }).join("");
       }
     }
+
+    // Phase 7 Civic Intelligence Summary
+    const ci = data.civic_intelligence_summary || {};
+    const activeCount = ci.active_incident_count !== undefined ? ci.active_incident_count : (ci.active_incidents || 0);
+    const agingCount = ci.aging_unassigned_count !== undefined ? ci.aging_unassigned_count : (ci.aging_unassigned || 0);
+    const unreadCount = ci.unread_operational_alerts !== undefined ? ci.unread_operational_alerts : (ci.unread_alerts || 0);
+
+    setVal("adm-ci-active", activeCount);
+    setVal("adm-ci-aging", agingCount);
+    setVal("adm-ci-unread", unreadCount);
+
+    const adminNotifBadge = document.getElementById("admin-notif-badge");
+    if (adminNotifBadge) {
+      if (unreadCount > 0) {
+        adminNotifBadge.textContent = unreadCount;
+        adminNotifBadge.classList.remove("hidden");
+      } else {
+        adminNotifBadge.classList.add("hidden");
+      }
+    }
+
+    // Phase 7 Recent Insights
+    const insightsList = document.getElementById("adm-ci-insights-list");
+    if (insightsList) {
+      const insights = data.recent_insights || [];
+      if (!insights.length) {
+        insightsList.innerHTML = `<div style="font-style: italic; color: var(--text-muted); padding: 4px 0;">No urgent operational anomalies observed.</div>`;
+      } else {
+        insightsList.innerHTML = insights.slice(0, 4).map(ins => {
+          const badgeClass = ins.level === "warning" ? "badge-failed" : "badge-progress";
+          return `
+            <div style="background: var(--bg-surface-elevated); padding: 0.45rem 0.65rem; border-radius: var(--radius-sm); border-left: 3px solid ${ins.level === 'warning' ? 'var(--civic-red)' : 'var(--civic-emerald)'}; margin-bottom: 2px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                <strong style="color: var(--text-primary); font-size: 0.78rem;">${ins.title}</strong>
+                <span class="badge ${badgeClass}" style="font-size: 0.65rem;">${ins.category}</span>
+              </div>
+              <div style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.3;">${ins.message}</div>
+            </div>
+          `;
+        }).join("");
+      }
+    }
+
+    // Phase 7 Spatial Summary
+    const spatialContent = document.getElementById("adm-spatial-summary-content");
+    if (spatialContent) {
+      const spatial = data.spatial_summary || {};
+      const topAreas = spatial.top_incident_concentration_areas || spatial.top_concentration_areas || [];
+      const mostAffected = spatial.most_affected_departments || [];
+      const deptDist = spatial.department_distribution || {};
+
+      let topAreasHtml = topAreas.length
+        ? topAreas.map(a => {
+            const lat = a.cell ? a.cell.lat : a.lat;
+            const lng = a.cell ? a.cell.lng : a.lng;
+            const count = a.count !== undefined ? a.count : a.incident_count;
+            const highSev = a.high_severity !== undefined ? ` (${a.high_severity} high)` : '';
+            return `<div style="display: flex; justify-content: space-between; padding: 2px 0;"><span>📍 [${Number(lat).toFixed(2)}, ${Number(lng).toFixed(2)}]</span><strong>${count} reports${highSev}</strong></div>`;
+          }).join("")
+        : `<span style="color: var(--text-muted); font-size: 0.75rem;">No spatial concentration recorded.</span>`;
+
+      let deptHtml = "";
+      if (Array.isArray(mostAffected) && mostAffected.length) {
+        deptHtml = mostAffected.map(d => `<span class="badge badge-progress" style="font-size: 0.7rem; margin-right: 4px; margin-bottom: 4px;">${d.department}: ${d.count}</span>`).join("");
+      } else if (typeof deptDist === "object") {
+        deptHtml = Object.entries(deptDist).map(([dept, cnt]) => `<span class="badge badge-progress" style="font-size: 0.7rem; margin-right: 4px; margin-bottom: 4px;">${dept}: ${cnt}</span>`).join("");
+      }
+
+      spatialContent.innerHTML = `
+        <div style="margin-bottom: 0.4rem;">
+          <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Top Observed Incident Concentrations:</span>
+          <div style="margin-top: 2px; font-size: 0.75rem;">${topAreasHtml}</div>
+        </div>
+        <div>
+          <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Spatial Department Distribution:</span>
+          <div style="display: flex; flex-wrap: wrap; margin-top: 4px;">${deptHtml || '<span style="color: var(--text-muted); font-size: 0.75rem;">No active department allocations.</span>'}</div>
+        </div>
+      `;
+    }
+
   } catch (err) {
     console.error("Error loading admin overview:", err);
   }
@@ -1658,6 +1834,16 @@ function initAdminSSE() {
     adminSSE.addEventListener("processing_completed", (e) => handleAdminEvent("AI READY", e.data, "feed-ai"));
     adminSSE.addEventListener("processing_failed", (e) => handleAdminEvent("AI FAILED", e.data, "feed-failed"));
     adminSSE.addEventListener("complaint_status_changed", (e) => handleAdminEvent("STATUS", e.data, "feed-resolved"));
+
+    // Phase 7 Notification events
+    adminSSE.addEventListener("notification_created", (e) => {
+      handleAdminEvent("ALERT", e.data, "feed-failed");
+      loadAdminNotifications();
+    });
+    adminSSE.addEventListener("high_severity_alert", (e) => handleAdminEvent("HIGH SEV", e.data, "feed-failed"));
+    adminSSE.addEventListener("processing_failure_alert", (e) => handleAdminEvent("AI FAIL", e.data, "feed-failed"));
+    adminSSE.addEventListener("assignment_alert", (e) => handleAdminEvent("ASSIGNMENT", e.data, "feed-stage"));
+    adminSSE.addEventListener("resolution_alert", (e) => handleAdminEvent("RESOLVED", e.data, "feed-resolved"));
 
     adminSSE.onerror = () => {
       // Browser EventSource automatically reconnects with backoff
@@ -1891,7 +2077,19 @@ async function retryComplaintAI(ticketId) {
   }
 }
 
-// ── 5. Live Operations Map ──────────────────────────────────────────────────
+// ── 5. Live Operations Map & Multi-Layer Civic Intelligence ────────────────
+function updateAdminMapLayersVisibility() {
+  if (!adminOpsMap) return;
+  for (const [key, group] of Object.entries(adminMapLayerGroups)) {
+    if (!group) continue;
+    if (adminMapLayers[key]) {
+      if (!adminOpsMap.hasLayer(group)) group.addTo(adminOpsMap);
+    } else {
+      if (adminOpsMap.hasLayer(group)) adminOpsMap.removeLayer(group);
+    }
+  }
+}
+
 async function loadAdminIncidentMap() {
   const container = document.getElementById("admin-ops-map");
   if (!container) return;
@@ -1902,31 +2100,69 @@ async function loadAdminIncidentMap() {
       maxZoom: 19,
       attribution: "© OpenStreetMap contributors"
     }).addTo(adminOpsMap);
+
+    adminMapLayerGroups.incidents = L.layerGroup();
+    adminMapLayerGroups.concentration = L.layerGroup();
+    adminMapLayerGroups.departments = L.layerGroup();
+    adminMapLayerGroups.resolution = L.layerGroup();
   } else {
     setTimeout(() => adminOpsMap.invalidateSize(), 150);
   }
 
-  const deptFilter = document.getElementById("admin-map-filter-dept")?.value || "";
-  const sevFilter = document.getElementById("admin-map-filter-sev")?.value || "";
+  if (!adminMapLayerGroups.incidents) {
+    adminMapLayerGroups.incidents = L.layerGroup();
+    adminMapLayerGroups.concentration = L.layerGroup();
+    adminMapLayerGroups.departments = L.layerGroup();
+    adminMapLayerGroups.resolution = L.layerGroup();
+  }
+
+  // Filter values
+  const days = document.getElementById("admin-map-filter-days")?.value || "";
+  const sev = document.getElementById("admin-map-filter-sev")?.value || "";
+  const status = document.getElementById("admin-map-filter-status")?.value || "";
+  const dept = document.getElementById("admin-map-filter-dept")?.value || "";
+  const aimode = document.getElementById("admin-map-filter-aimode")?.value || "";
+  const category = document.getElementById("admin-map-filter-category")?.value || "";
+
+  const params = new URLSearchParams();
+  if (days) params.append("days", days);
+  if (sev) params.append("severity", sev);
+  if (status) params.append("status", status);
+  if (dept) params.append("department", dept);
+  if (aimode) params.append("ai_mode", aimode);
+  if (category) params.append("category", category);
+  const qs = params.toString() ? `?${params.toString()}` : "";
 
   try {
-    const res = await fetch(`${API}/analytics/geo`);
-    if (!res.ok) throw new Error("Could not retrieve geo analytics.");
-    const data = await res.json();
-    let points = data.points || [];
+    Object.values(adminMapLayerGroups).forEach(group => group && group.clearLayers());
 
-    // Filter points
-    if (deptFilter) points = points.filter(p => p.department === deptFilter);
-    if (sevFilter) points = points.filter(p => p.severity === sevFilter);
+    // 1. Fetch filtered points
+    const res = await fetch(`${API}/admin/map${qs}`);
+    if (!res.ok) throw new Error("Could not retrieve operational map incidents.");
+    const mapData = await res.json();
+    const points = mapData.points || [];
+
+    // 2. Fetch geographic aggregation for concentration layer
+    let aggData = { cells: [] };
+    try {
+      const aggRes = await fetch(`${API}/admin/map/aggregate${qs}`);
+      if (aggRes.ok) aggData = await aggRes.json();
+    } catch (_) {}
 
     // Update count display
     const countEl = document.getElementById("admin-map-count");
-    if (countEl) countEl.textContent = `Showing ${points.length} incident locations on map`;
+    if (countEl) {
+      countEl.textContent = `Showing ${points.length} incident locations on map across selected filters`;
+    }
 
-    // Clear previous markers
-    adminOpsMarkers.forEach(m => adminOpsMap.removeLayer(m));
-    adminOpsMarkers = [];
+    const deptColors = {
+      "Sanitation Department": "#0284c7",
+      "Recycling Department": "#10b981",
+      "Health & Hazmat Department": "#f43f5e",
+      "Public Works Department": "#8b5cf6",
+    };
 
+    // Populate Layer A: Incidents
     points.forEach(p => {
       const color = p.severity === "High" ? "#dc2626" : p.severity === "Medium" ? "#d97706" : "#059669";
       const marker = L.circleMarker([p.latitude, p.longitude], {
@@ -1935,7 +2171,7 @@ async function loadAdminIncidentMap() {
         color: "#ffffff",
         weight: 1.5,
         fillOpacity: 0.85,
-      }).addTo(adminOpsMap);
+      });
 
       marker.bindPopup(`
         <div style="font-family: inherit; font-size: 0.85rem; line-height: 1.4;">
@@ -1943,18 +2179,389 @@ async function loadAdminIncidentMap() {
           <div style="color: ${color}; font-weight: 700; margin-bottom: 4px;">${p.severity} Severity</div>
           <div><strong>Status:</strong> ${p.status}</div>
           <div><strong>Dept:</strong> ${p.department || 'Pending'}</div>
+          <div><strong>Category:</strong> ${p.category || 'Unclassified'}</div>
+          <div><strong>AI Mode:</strong> ${p.ai_mode || 'N/A'}</div>
           <div><strong>Address:</strong> ${p.address || 'Street Pin'}</div>
           <button class="btn btn-sm btn-primary" onclick="openAdminIncidentModal('${p.ticket_id}')" style="margin-top: 6px; width: 100%; padding: 3px 6px;">
             Inspect Incident
           </button>
         </div>
       `);
+      adminMapLayerGroups.incidents.addLayer(marker);
 
-      adminOpsMarkers.push(marker);
+      // Populate Layer C: Department Workload (active cases)
+      if (p.status !== "RESOLVED" && p.department) {
+        const dColor = deptColors[p.department] || "#64748b";
+        const dMarker = L.circleMarker([p.latitude, p.longitude], {
+          radius: 8,
+          fillColor: dColor,
+          color: "#ffffff",
+          weight: 1.5,
+          fillOpacity: 0.85,
+        });
+        dMarker.bindPopup(`
+          <div style="font-family: inherit; font-size: 0.85rem; line-height: 1.4;">
+            <div style="font-weight: 800; color: ${dColor};">${p.department}</div>
+            <div>Incident #${p.ticket_id} (Status: ${p.status})</div>
+            <div>Severity: <strong>${p.severity}</strong></div>
+            <button class="btn btn-sm btn-secondary" onclick="openAdminIncidentModal('${p.ticket_id}')" style="margin-top: 6px; width: 100%; padding: 2px 6px;">Inspect</button>
+          </div>
+        `);
+        adminMapLayerGroups.departments.addLayer(dMarker);
+      }
+
+      // Populate Layer D: Resolution Activity (resolved cases)
+      if (p.status === "RESOLVED") {
+        const resMarker = L.circleMarker([p.latitude, p.longitude], {
+          radius: 8,
+          fillColor: "#059669",
+          color: "#ffffff",
+          weight: 2,
+          fillOpacity: 0.85,
+        });
+        resMarker.bindPopup(`
+          <div style="font-family: inherit; font-size: 0.85rem; line-height: 1.4;">
+            <div style="font-weight: 800; color: #059669;">✅ Resolved Incident #${p.ticket_id}</div>
+            <div>Dept: ${p.department || 'Sanitation'}</div>
+            <div>Category: ${p.category || 'General'}</div>
+            <button class="btn btn-sm btn-secondary" onclick="openAdminIncidentModal('${p.ticket_id}')" style="margin-top: 6px; width: 100%; padding: 2px 6px;">View Details</button>
+          </div>
+        `);
+        adminMapLayerGroups.resolution.addLayer(resMarker);
+      }
     });
+
+    // Populate Layer B: Incident Concentration (observed density cells)
+    const cells = aggData.cells || [];
+    cells.forEach(c => {
+      const radius = Math.min(50, Math.max(16, c.incident_count * 5));
+      const hasHigh = c.high_severity > 0;
+      const concColor = hasHigh ? "#ef4444" : "#f59e0b";
+
+      const circle = L.circleMarker([c.cell.lat, c.cell.lng], {
+        radius: radius,
+        fillColor: concColor,
+        color: concColor,
+        weight: 2,
+        fillOpacity: 0.35,
+      });
+
+      circle.bindPopup(`
+        <div style="font-family: inherit; font-size: 0.85rem; line-height: 1.4;">
+          <div style="font-weight: 800; color: ${concColor}; margin-bottom: 2px;">Historical Incident Density</div>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px;">Cell Center: [${c.cell.lat.toFixed(4)}, ${c.cell.lng.toFixed(4)}]</div>
+          <div>Observed Incidents: <strong>${c.incident_count}</strong></div>
+          <div>Active Workload: <strong>${c.active}</strong></div>
+          <div>Resolved: <strong>${c.resolved}</strong></div>
+          <div style="color: ${hasHigh ? '#ef4444' : 'inherit'}; font-weight: ${hasHigh ? '700' : 'normal'};">
+            High Severity: <strong>${c.high_severity}</strong>
+          </div>
+          <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 6px; border-top: 1px solid var(--border-color); padding-top: 4px;">
+            *Observed historical incident concentration. Not predictive risk.
+          </div>
+        </div>
+      `);
+      adminMapLayerGroups.concentration.addLayer(circle);
+    });
+
+    updateAdminMapLayersVisibility();
 
   } catch (err) {
     console.error("Error loading admin incident map:", err);
+  }
+}
+
+// ── 5B. Operational Insights ────────────────────────────────────────────────
+async function loadAdminInsights(days = 7) {
+  try {
+    const res = await fetch(`${API}/admin/insights?days=${days}`);
+    if (!res.ok) throw new Error("Could not load operational insights.");
+    const data = await res.json();
+
+    // 1. Civic Inflow & Trends
+    const trends = data.trends || {};
+    const setTrend = (key, valId, deltaId, prevId, isPct = false) => {
+      const t = trends[key] || {};
+      const valEl = document.getElementById(valId);
+      const deltaEl = document.getElementById(deltaId);
+      const prevEl = document.getElementById(prevId);
+
+      if (valEl) valEl.textContent = isPct ? `${t.current || 0}%` : (t.current || 0);
+      if (prevEl) prevEl.textContent = `Prev: ${isPct ? (t.previous || 0) + '%' : (t.previous || 0)}`;
+
+      if (deltaEl) {
+        const delta = t.delta_pct !== undefined ? t.delta_pct : (t.delta !== undefined ? t.delta : 0);
+        const sign = delta >= 0 ? "+" : "";
+        deltaEl.textContent = `${sign}${delta}%`;
+        deltaEl.className = `badge ${delta > 0 ? (key === 'resolved' || key === 'resolution_rate' ? 'badge-resolved' : 'badge-failed') : 'badge-progress'}`;
+      }
+    };
+
+    setTrend("volume", "ins-val-volume", "ins-delta-volume", "ins-prev-volume");
+    setTrend("high_severity", "ins-val-high", "ins-delta-high", "ins-prev-high");
+    setTrend("resolved", "ins-val-resolved", "ins-delta-resolved", "ins-prev-resolved");
+    setTrend("resolution_rate", "ins-val-rate", "ins-delta-rate", "ins-prev-rate", true);
+
+    // 2. Operational Age Monitoring
+    const wl = data.workload || {};
+    const setEl = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val !== undefined ? val : 0;
+    };
+    setEl("ins-age-unassigned", wl.unassigned_beyond_threshold);
+    setEl("ins-age-highsev", wl.high_severity_active_beyond_threshold);
+    setEl("ins-age-new", wl.active_beyond_threshold);
+
+    // 3. Resolution Performance Milestones
+    const rp = data.resolution_performance || {};
+    const sv = rp.submitted_to_verified || {};
+    const svStatus = document.getElementById("ins-perf-sv-status");
+    const svAvg = document.getElementById("ins-perf-sv-avg");
+    const svMed = document.getElementById("ins-perf-sv-med");
+    const svCases = document.getElementById("ins-perf-sv-cases");
+
+    if (svStatus) svStatus.textContent = sv.status || "Available";
+    if (svAvg) svAvg.textContent = sv.avg_formatted || "Insufficient data";
+    if (svMed) svMed.textContent = sv.median_formatted || "Insufficient data";
+    if (svCases) svCases.textContent = sv.cases_count !== undefined ? sv.cases_count : 0;
+
+    // AI Operations
+    const ai = data.ai_operations || {};
+    const aiRate = document.getElementById("ins-ai-success-rate");
+    if (aiRate) aiRate.textContent = `${ai.success_rate_pct !== undefined ? ai.success_rate_pct : 100}%`;
+    setEl("ins-ai-failed", ai.failed);
+    setEl("ins-ai-retries", ai.retries);
+    setEl("ins-ai-yolo", ai.real_yolo_usage);
+
+    // 4. Recurring Report Concentrations
+    const recurTbody = document.getElementById("ins-recurring-tbody");
+    if (recurTbody) {
+      const rep = data.repeated_incidents || {};
+      const clusters = rep.concentrations || [];
+      if (!clusters.length) {
+        recurTbody.innerHTML = `
+          <tr><td colspan="6" style="text-align: center; color: var(--civic-emerald); font-weight: 600; padding: 1.5rem;">
+            ✅ No recurring incident concentrations identified within 50m radius.
+          </td></tr>
+        `;
+      } else {
+        recurTbody.innerHTML = clusters.map(c => {
+          const depts = c.departments && c.departments.length ? c.departments.join(", ") : "Pending";
+          return `
+            <tr>
+              <td><strong style="color: #38bdf8;">${c.area_label || 'Recurring Incident Area'}</strong></td>
+              <td style="font-family: monospace; font-size: 0.8rem;">[${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}]</td>
+              <td><span class="badge badge-failed" style="font-size: 0.85rem;">${c.report_count} reports</span></td>
+              <td>${c.active} active / ${c.resolved} resolved</td>
+              <td style="font-size: 0.8rem;">${depts}</td>
+              <td>
+                <button class="btn btn-sm btn-secondary" onclick="focusMapOnCoordinates(${c.lat}, ${c.lng})" style="padding: 2px 8px; font-size: 0.75rem;">
+                  📍 Map Area
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join("");
+      }
+    }
+  } catch (err) {
+    console.error("Error loading operational insights:", err);
+  }
+}
+
+function focusMapOnCoordinates(lat, lng) {
+  switchAdminView("map");
+  if (adminOpsMap) {
+    adminOpsMap.setView([lat, lng], 16);
+  }
+}
+
+// ── 5C. Operational Notifications ───────────────────────────────────────────
+async function loadAdminNotifications() {
+  try {
+    const res = await fetch(`${API}/admin/notifications`);
+    if (!res.ok) return;
+    const data = await res.json();
+    adminNotificationsData = data.notifications || [];
+
+    const badge = document.getElementById("admin-notif-badge");
+    const unreadCount = data.unread_count || 0;
+    if (badge) {
+      if (unreadCount > 0) {
+        badge.textContent = unreadCount;
+        badge.classList.remove("hidden");
+      } else {
+        badge.classList.add("hidden");
+      }
+    }
+
+    const sub = document.getElementById("admin-notif-unread-sub");
+    if (sub) {
+      sub.textContent = `${unreadCount} unread operational alert${unreadCount === 1 ? '' : 's'}`;
+    }
+
+    renderAdminNotifications();
+  } catch (err) {
+    console.warn("Could not load admin notifications:", err);
+  }
+}
+
+function renderAdminNotifications() {
+  const container = document.getElementById("admin-notif-list-container");
+  if (!container) return;
+
+  const catFilter = document.getElementById("admin-notif-filter-cat")?.value || "";
+  const unreadOnly = document.getElementById("admin-notif-unread-toggle")?.checked || false;
+
+  let items = adminNotificationsData;
+  if (catFilter) items = items.filter(n => n.category === catFilter);
+  if (unreadOnly) items = items.filter(n => !n.is_read);
+
+  if (!items.length) {
+    container.innerHTML = `
+      <div style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+        No operational notifications matching current filter.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = items.map(n => {
+    const timeStr = new Date(n.created_at).toLocaleString();
+    const isUnread = !n.is_read;
+    const catBadgeClass = n.category === "NEW_HIGH_SEVERITY" || n.category === "AI_PROCESSING_FAILED" ? "badge-failed" : "badge-progress";
+
+    return `
+      <div class="notif-item ${isUnread ? 'unread' : ''}" style="background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem 0.9rem; display: flex; flex-direction: column; gap: 0.35rem; position: relative;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="badge ${catBadgeClass}" style="font-size: 0.7rem;">${n.category}</span>
+            <strong style="font-size: 0.85rem; color: var(--text-primary);">${n.title}</strong>
+          </div>
+          <span style="font-size: 0.72rem; color: var(--text-muted);">${timeStr}</span>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
+          ${n.message}
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.25rem;">
+          <div>
+            ${n.ticket_id ? `<button class="btn btn-sm btn-secondary" onclick="closeModal('admin-notif-modal'); openAdminIncidentModal('${n.ticket_id}');" style="padding: 2px 7px; font-size: 0.72rem;">Inspect #${n.ticket_id}</button>` : ''}
+          </div>
+          ${isUnread ? `<button class="btn btn-sm btn-outline" onclick="markAdminNotificationRead('${n.id}')" style="padding: 2px 7px; font-size: 0.72rem;">Mark read</button>` : '<span style="font-size: 0.72rem; color: var(--text-muted);">✓ Read</span>'}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function markAdminNotificationRead(id) {
+  try {
+    const res = await fetch(`${API}/admin/notifications/${id}/read`, { method: "PATCH" });
+    if (res.ok) {
+      await loadAdminNotifications();
+      loadAdminOverview();
+    }
+  } catch (err) {
+    console.error("Could not mark notification read:", err);
+  }
+}
+
+async function markAllAdminNotificationsRead() {
+  try {
+    const res = await fetch(`${API}/admin/notifications/read-all`, { method: "POST" });
+    if (res.ok) {
+      await loadAdminNotifications();
+      loadAdminOverview();
+      showToast("All operational alerts marked as read.", "success", 2000);
+    }
+  } catch (err) {
+    console.error("Could not mark all notifications read:", err);
+  }
+}
+
+// ── 5D. Citizen Notifications ───────────────────────────────────────────────
+async function loadCitizenNotifications() {
+  if (!currentUser) return;
+  try {
+    const res = await fetch(`${API}/notifications`);
+    if (!res.ok) return;
+    const data = await res.json();
+    citizenNotificationsData = data.notifications || [];
+
+    const badge = document.getElementById("citizen-notif-badge");
+    const unreadCount = data.unread_count || 0;
+    if (badge) {
+      if (unreadCount > 0) {
+        badge.textContent = unreadCount;
+        badge.classList.remove("hidden");
+      } else {
+        badge.classList.add("hidden");
+      }
+    }
+
+    renderCitizenNotifications();
+  } catch (err) {
+    console.warn("Could not load citizen notifications:", err);
+  }
+}
+
+function renderCitizenNotifications() {
+  const container = document.getElementById("citizen-notif-list-container");
+  if (!container) return;
+
+  if (!citizenNotificationsData.length) {
+    container.innerHTML = `
+      <div style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+        You have no notifications yet. Status updates for your reports will appear here.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = citizenNotificationsData.map(n => {
+    const timeStr = new Date(n.created_at).toLocaleString();
+    const isUnread = !n.is_read;
+
+    return `
+      <div class="notif-item ${isUnread ? 'unread' : ''}" style="background: var(--bg-surface-elevated); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem 0.9rem; display: flex; flex-direction: column; gap: 0.35rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <strong style="font-size: 0.85rem; color: var(--text-primary);">${n.title}</strong>
+          <span style="font-size: 0.72rem; color: var(--text-muted);">${timeStr}</span>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
+          ${n.message}
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.25rem;">
+          <div>
+            ${n.ticket_id ? `<button class="btn btn-sm btn-primary" onclick="closeModal('citizen-notif-modal'); openComplaintDetail('${n.ticket_id}');" style="padding: 2px 8px; font-size: 0.75rem;">Track Report #${n.ticket_id}</button>` : ''}
+          </div>
+          ${isUnread ? `<button class="btn btn-sm btn-outline" onclick="markCitizenNotificationRead('${n.id}')" style="padding: 2px 7px; font-size: 0.72rem;">Mark read</button>` : '<span style="font-size: 0.72rem; color: var(--text-muted);">✓ Read</span>'}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function markCitizenNotificationRead(id) {
+  try {
+    const res = await fetch(`${API}/notifications/${id}/read`, { method: "PATCH" });
+    if (res.ok) {
+      await loadCitizenNotifications();
+    }
+  } catch (err) {
+    console.error("Could not mark citizen notification read:", err);
+  }
+}
+
+async function markAllCitizenNotificationsRead() {
+  try {
+    const res = await fetch(`${API}/notifications/read-all`, { method: "POST" });
+    if (res.ok) {
+      await loadCitizenNotifications();
+      showToast("All notifications marked as read.", "success", 2000);
+    }
+  } catch (err) {
+    console.error("Could not mark all citizen notifications read:", err);
   }
 }
 

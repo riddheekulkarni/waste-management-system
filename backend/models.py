@@ -157,3 +157,33 @@ class DetectionItem(db.Model):
             "box": [self.x1, self.y1, self.x2, self.y2],
         }
 
+
+class Notification(db.Model):
+    __tablename__ = "notifications"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    ticket_id = db.Column(db.String(8), db.ForeignKey("complaints.id"), nullable=True, index=True)
+    category = db.Column(db.String(32), nullable=False, index=True)
+    title = db.Column(db.String(128), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    severity = db.Column(db.String(10), nullable=True)
+    department = db.Column(db.String(64), nullable=True)
+    is_read = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "ticket_id": self.ticket_id,
+            "category": self.category,
+            "title": self.title,
+            "message": self.message,
+            "severity": self.severity,
+            "department": self.department,
+            "is_read": bool(self.is_read),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+

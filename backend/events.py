@@ -39,6 +39,12 @@ EVENT_PROCESSING_COMPLETED = "processing_completed"
 EVENT_PROCESSING_FAILED = "processing_failed"
 EVENT_STATUS_CHANGED = "complaint_status_changed"
 EVENT_HEARTBEAT = "heartbeat"
+EVENT_NOTIFICATION_CREATED = "notification_created"
+EVENT_NOTIFICATION_READ = "notification_read"
+EVENT_HIGH_SEVERITY_ALERT = "high_severity_alert"
+EVENT_PROCESSING_FAILURE_ALERT = "processing_failure_alert"
+EVENT_ASSIGNMENT_ALERT = "assignment_alert"
+EVENT_RESOLUTION_ALERT = "resolution_alert"
 
 # In-memory subscriber registry for testing / fallback mode
 _memory_subscribers: Dict[str, list] = {}
@@ -118,6 +124,62 @@ def publish_complaint_event(
             logger.debug("[SSE PubSub] Published '%s' event to %s", event_type, channel_name)
         except Exception as exc:
             logger.debug("[SSE PubSub] Redis publish failed (%s). Event routed via in-memory bus.", exc)
+
+
+def publish_notification_event(
+    notification_data: Dict[str, Any],
+    event_type: str = EVENT_NOTIFICATION_CREATED,
+    app=None
+) -> None:
+    """
+    Publish a notification event to relevant SSE channels (admin:events and/or complaints:<ticket_id>).
+    """
+    if app is None:
+        try:
+            from flask import current_app
+            app = current_app._get_current_object()
+        except Exception:
+            app = None
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+    envelope = {
+        "event": event_type,
+        "notification": notification_data,
+        "timestamp": timestamp,
+    }
+
+    target_channels = ["admin:events"]
+    ticket_id = notification_data.get("ticket_id")
+    if ticket_id:
+        target_channels.append(f"complaints:{ticket_id}")
+
+    serialized = json.dumps(envelope)
+
+    # 1. In-memory distribution
+    with _memory_lock:
+        for ch in target_channels:
+            if ch in _memory_subscribers:
+                for q in _memory_subscribers[ch]:
+                    try:
+                        q.put_nowait(envelope)
+                    except queue.Full:
+                        pass
+
+    # 2. Redis Pub/Sub distribution
+    if app:
+        redis_url = app.config.get("REDIS_URL")
+        async_mode = app.config.get("ASYNC_MODE", "redis").lower()
+        is_testing = app.config.get("TESTING", False)
+        if is_testing or async_mode == "sync":
+            return
+        if redis_url:
+            try:
+                import redis
+                r = redis.from_url(redis_url, socket_connect_timeout=2)
+                for ch in target_channels:
+                    r.publish(ch, serialized)
+            except Exception as exc:
+                logger.debug("[SSE PubSub] Redis publish notification failed (%s)", exc)
 
 
 def subscribe_complaint_events(
