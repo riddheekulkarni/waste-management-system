@@ -9,6 +9,14 @@ any code changes.  See .env.example for the full list of supported variables.
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+    load_dotenv(os.path.join(BASE_DIR, ".env"))
+except ImportError:
+    pass
 
 
 class Config:
@@ -41,8 +49,15 @@ class Config:
 
     # ── Waste Detection ───────────────────────────────────────────────────────
     # Set WASTE_MODEL_WEIGHTS to the absolute path of a trained best.pt file.
-    # Leave blank (or unset) to run in mock-detection mode (safe for demos).
-    WASTE_MODEL_WEIGHTS = os.environ.get("WASTE_MODEL_WEIGHTS") or None
+    # If unset, auto-checks project root, backend folder, and models/ folder.
+    # Falls back to mock-detection mode if no weights are found.
+    _candidate_weights = [
+        os.environ.get("WASTE_MODEL_WEIGHTS"),
+        os.path.join(PROJECT_ROOT, "best.pt"),
+        os.path.join(BASE_DIR, "best.pt"),
+        os.path.join(PROJECT_ROOT, "models", "best.pt"),
+    ]
+    WASTE_MODEL_WEIGHTS = next((w for w in _candidate_weights if w and os.path.exists(w)), None)
 
     # ── Rate Limiting (flask-limiter) ─────────────────────────────────────────
     # Toggled to False in tests via app.config["RATELIMIT_ENABLED"] = False.

@@ -1,4 +1,5 @@
 import math
+import os
 import uuid
 from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
@@ -92,6 +93,10 @@ class Complaint(db.Model):
             "is_duplicate": bool(self.is_duplicate),
             "duplicate_of_id": self.duplicate_of_id,
         }
+        annotated_name = f"annotated_{self.image_path}"
+        annotated_path = os.path.join(os.path.dirname(__file__), "uploads", annotated_name)
+        data["annotated_image_path"] = annotated_name if os.path.exists(annotated_path) else None
+
         if include_detections:
             data["detections"] = [d.to_dict() for d in self.detections]
         return data

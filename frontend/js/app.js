@@ -534,6 +534,7 @@ function setupReportForm() {
       if (!res.ok) throw new Error(data.error || "Upload failed");
 
       const submittedAt = data.created_at ? new Date(data.created_at).toLocaleString() : "Just now";
+      const previewSrc = `/uploads/${data.annotated_image_path || data.image_path}`;
 
       resultBox.className = "glass-card result-card success";
       resultBox.innerHTML = `
@@ -544,14 +545,27 @@ function setupReportForm() {
             <span style="font-size: 0.85rem; color: var(--text-muted);">Routed to <strong>${data.department}</strong></span>
           </div>
         </div>
-        <p style="font-size: 0.9rem; margin-top: 0.5rem;">
-          🕒 <strong>Reported at:</strong> ${submittedAt}<br/>
-          📍 <strong>Location:</strong> ${data.address}<br/>
-          📊 <strong>AI Severity Assessment:</strong> <span class="badge badge-${data.severity.level.toLowerCase()}">${data.severity.level} Severity</span> (${data.severity.item_count} items detected)
-        </p>
-        <button class="btn btn-sm btn-secondary" style="margin-top: 0.75rem;" onclick="switchToTab('track')">
-          View in Complaints Tracker →
-        </button>
+        <div style="display: flex; gap: 1rem; align-items: flex-start; margin-top: 0.75rem; flex-wrap: wrap;">
+          <div style="position: relative; width: 140px; height: 100px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); background: #000; flex-shrink: 0;">
+            <img src="${previewSrc}" alt="AI preview" style="width: 100%; height: 100%; object-fit: cover;" />
+            <span style="position: absolute; bottom: 4px; left: 4px; background: rgba(0,0,0,0.75); color: #10b981; font-size: 0.65rem; padding: 2px 5px; border-radius: 4px; font-weight: 600;">🎯 AI Boxed</span>
+          </div>
+          <div style="flex: 1; min-width: 200px;">
+            <p style="font-size: 0.88rem; margin: 0;">
+              🕒 <strong>Reported:</strong> ${submittedAt}<br/>
+              📍 <strong>Location:</strong> ${data.address}<br/>
+              📊 <strong>AI Severity:</strong> <span class="badge badge-${data.severity.level.toLowerCase()}">${data.severity.level} Severity</span> (${data.severity.item_count} items detected)
+            </p>
+            <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+              <button class="btn btn-sm btn-primary" onclick="openComplaintDetail('${data.ticket_id}')">
+                🔍 Inspect AI Bounding Boxes
+              </button>
+              <button class="btn btn-sm btn-secondary" onclick="switchToTab('track')">
+                View in Tracker →
+              </button>
+            </div>
+          </div>
+        </div>
       `;
 
       e.target.reset();
@@ -630,13 +644,17 @@ function renderComplaintsCards(complaints) {
   list.innerHTML = complaints.map((c) => {
     const date = new Date(c.created_at).toLocaleString();
     const statusClass = c.status === "Resolved" ? "badge-resolved" : c.status === "In Progress" ? "badge-progress" : "badge-open";
+    const thumbSrc = c.annotated_image_path ? `/uploads/${c.annotated_image_path}` : `/uploads/${c.image_path}`;
     return `
       <div class="glass-card complaint-card severity-${c.severity.level}">
         <div class="card-header-row">
           <span class="ticket-id">Ticket #${c.ticket_id}</span>
           <span class="badge ${statusClass}">${c.status}</span>
         </div>
-        <img src="/uploads/${c.image_path}" class="card-img-thumb" alt="Waste photo" />
+        <div style="position: relative;">
+          <img src="${thumbSrc}" class="card-img-thumb" alt="Waste photo" />
+          ${c.annotated_image_path ? `<span style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.75); color: #10b981; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;">🎯 AI Boxed</span>` : ''}
+        </div>
         <div class="card-body-info">
           <div class="info-item">📌 ${c.address}</div>
           <div class="info-item">🏛️ ${c.department}</div>
@@ -876,6 +894,23 @@ function initAdminMap(complaints) {
 // ==========================================
 // 6. COMPLAINT INSPECTION MODAL
 // ==========================================
+function toggleModalImageView(type) {
+  const img = document.getElementById("detail-modal-img");
+  const btnBoxes = document.getElementById("btn-toggle-boxes");
+  const btnOrig = document.getElementById("btn-toggle-orig");
+  if (!img) return;
+
+  if (type === "annotated") {
+    img.src = img.dataset.annotated;
+    if (btnBoxes) btnBoxes.className = "btn btn-sm btn-primary active";
+    if (btnOrig) btnOrig.className = "btn btn-sm btn-outline";
+  } else {
+    img.src = img.dataset.original;
+    if (btnBoxes) btnBoxes.className = "btn btn-sm btn-outline";
+    if (btnOrig) btnOrig.className = "btn btn-sm btn-primary active";
+  }
+}
+
 async function openComplaintDetail(ticketId) {
   try {
     const res = await fetch(`${API}/complaints/${ticketId}`);
@@ -885,35 +920,71 @@ async function openComplaintDetail(ticketId) {
     const content = document.getElementById("detail-modal-content");
     const date = new Date(c.created_at).toLocaleString();
 
+    const hasAnnotated = Boolean(c.annotated_image_path);
+    const annotatedSrc = `/uploads/${c.annotated_image_path || c.image_path}`;
+    const originalSrc = `/uploads/${c.image_path}`;
+
     content.innerHTML = `
-      <div style="margin-bottom: 1rem;">
-        <span class="user-role-badge" style="float: right;">${c.status}</span>
-        <h2>Ticket #${c.ticket_id}</h2>
-        <p style="color: var(--text-muted); font-size: 0.85rem;">Submitted on ${date} by ${c.submitted_by}</p>
+      <div style="margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <h2 style="font-size: 1.35rem; margin: 0;">Ticket #${c.ticket_id}</h2>
+            <span class="user-role-badge ${c.status === 'Resolved' ? 'admin' : 'citizen'}">${c.status}</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.35rem;">
+            Submitted on ${date} by <strong>${c.submitted_by}</strong>
+          </p>
+        </div>
+        <div>
+          <span class="badge badge-${c.severity.level.toLowerCase()}" style="font-size: 0.88rem; padding: 0.4rem 0.85rem;">
+            ⚠️ ${c.severity.level} Severity (${c.severity.item_count} items)
+          </span>
+        </div>
       </div>
 
       <div class="detail-grid">
         <div>
-          <div class="detail-img-box">
-            <img src="/uploads/${c.image_path}" alt="Complaint image" />
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);">📸 Visual Evidence & AI Inspection</span>
+            ${hasAnnotated ? `
+            <div style="display: flex; gap: 0.35rem;">
+              <button type="button" class="btn btn-sm btn-primary active" id="btn-toggle-boxes" onclick="toggleModalImageView('annotated')">🎯 AI Bounding Boxes</button>
+              <button type="button" class="btn btn-sm btn-outline" id="btn-toggle-orig" onclick="toggleModalImageView('original')">📷 Original Photo</button>
+            </div>
+            ` : ''}
           </div>
-          <div style="margin-top: 1rem; font-size: 0.88rem;">
-            <h4>AI Detection Analysis:</h4>
-            <ul style="margin-left: 1.2rem; color: var(--text-muted); margin-top: 0.4rem;">
+
+          <div class="detail-img-box" style="position: relative; border-radius: 12px; overflow: hidden; background: #0b0f17; border: 1px solid var(--border-color); text-align: center; min-height: 220px; display: flex; align-items: center; justify-content: center;">
+            <img id="detail-modal-img" src="${hasAnnotated ? annotatedSrc : originalSrc}" data-annotated="${annotatedSrc}" data-original="${originalSrc}" alt="Complaint inspection" style="max-width: 100%; max-height: 380px; object-fit: contain; display: block; border-radius: 8px;" />
+          </div>
+
+          <div style="margin-top: 1rem; background: var(--bg-card); padding: 0.9rem; border-radius: 10px; border: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <h4 style="margin: 0; font-size: 0.9rem; color: var(--text-main);">🔍 AI Classified Waste Items (${c.detections ? c.detections.length : 0})</h4>
+              <span style="font-size: 0.78rem; color: var(--accent-emerald);">YOLOv8 Active</span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.45rem;">
               ${c.detections && c.detections.length > 0 
-                ? c.detections.map(d => `<li><strong>${d.class}</strong> (${(d.confidence * 100).toFixed(0)}% confidence)</li>`).join("")
-                : `<li>Items Detected: ${c.severity.item_count} items</li>`}
-            </ul>
+                ? c.detections.map(d => {
+                    const confPercent = (d.confidence * 100).toFixed(0);
+                    return `<span class="badge" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; font-size: 0.8rem; padding: 0.3rem 0.65rem;">
+                      🏷️ <strong>${d.class}</strong> (${confPercent}%)
+                    </span>`;
+                  }).join("")
+                : `<span style="color: var(--text-muted); font-size: 0.85rem;">Items Detected: ${c.severity.item_count} items</span>`
+              }
+            </div>
           </div>
         </div>
 
         <div>
           <div class="glass-card" style="padding: 1rem; margin-bottom: 1rem;">
-            <p>📌 <strong>Address:</strong> ${c.address}</p>
-            <p>🏛️ <strong>Dispatched Dept:</strong> ${c.department}</p>
-            <p>📊 <strong>Severity Score:</strong> <span class="badge badge-${c.severity.level.toLowerCase()}">${c.severity.level}</span></p>
+            <p style="margin-bottom: 0.5rem;">📌 <strong>Address:</strong> ${c.address}</p>
+            <p style="margin-bottom: 0.5rem;">🏛️ <strong>Dispatched Department:</strong> <strong style="color: var(--accent-blue);">${c.department}</strong></p>
+            <p style="margin-bottom: 0.5rem;">📊 <strong>Coverage Area:</strong> ${((c.severity.coverage_ratio || 0) * 100).toFixed(1)}% of frame</p>
+            ${c.is_duplicate ? `<p style="color: var(--accent-amber); font-size: 0.85rem; margin-top: 0.5rem;">⚠️ Linked to duplicate Ticket #${c.duplicate_of_id}</p>` : ''}
           </div>
-          <div id="detail-map" class="interactive-map" style="height: 200px;"></div>
+          <div id="detail-map" class="interactive-map" style="height: 220px; border-radius: 12px; border: 1px solid var(--border-color);"></div>
         </div>
       </div>
     `;
