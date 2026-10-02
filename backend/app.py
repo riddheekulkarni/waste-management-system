@@ -34,7 +34,10 @@ def create_app():
     with app.app_context():
         # In non-production testing or initial dev environments, create missing tables safely
         if not app.config.get("IS_PRODUCTION"):
-            db.create_all()
+            try:
+                db.create_all()
+            except Exception as e:
+                logger.info("db.create_all() schema notice: %s", e)
 
     # ── Rate Limiter ───────────────────────────────────────────────────────
     limiter.enabled = app.config.get("RATELIMIT_ENABLED", True)

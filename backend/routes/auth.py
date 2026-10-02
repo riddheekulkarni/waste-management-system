@@ -107,6 +107,34 @@ def login():
     })
 
 
+@auth_bp.route("/demo-login", methods=["POST"])
+def demo_login():
+    data = request.get_json() or {}
+    role = data.get("role", "citizen")
+    if role not in ("citizen", "admin"):
+        return jsonify({"error": "Invalid demo role specified.", "status_code": 400}), 400
+
+    target_username = "admin" if role == "admin" else "citizen"
+    user = User.query.filter_by(username=target_username).first()
+    if not user:
+        user = User.query.filter_by(role=role).first()
+
+    if not user:
+        return jsonify({
+            "error": f"Demo {role} account not found in database. Run seed script.",
+            "status_code": 404
+        }), 404
+
+    session["user_id"] = user.id
+    session["role"] = user.role
+
+    return jsonify({
+        "message": f"Demo {role} login successful",
+        "user": user.to_dict(),
+        "status_code": 200
+    }), 200
+
+
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
     session.clear()
