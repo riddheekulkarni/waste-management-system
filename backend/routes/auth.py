@@ -125,3 +125,17 @@ def get_current_user():
         return jsonify({"user": None})
 
     return jsonify({"user": user.to_dict()})
+ 
+ 
+@auth_bp.route("/users", methods=["GET"])
+@require_role("admin")
+def list_users():
+    """
+    Admin-only endpoint listing registered users for municipal operations management.
+    """
+    users = User.query.order_by(User.created_at.desc()).all()
+    return jsonify({
+        "users": [u.to_dict() for u in users],
+        "total": len(users),
+        "status_code": 200
+    }), 200

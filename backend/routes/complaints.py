@@ -251,6 +251,14 @@ def list_complaints():
     if ai_mode:
         query = query.filter_by(ai_mode=ai_mode)
 
+    search_query = request.args.get("q") or request.args.get("search")
+    if search_query:
+        sq = f"%{search_query.strip()}%"
+        query = query.filter(
+            (Complaint.id.ilike(sq)) |
+            (Complaint.address.ilike(sq))
+        )
+
     # Server-Side Pagination
     raw_page = request.args.get("page", 1)
     raw_per_page = request.args.get("per_page", 20)
@@ -496,7 +504,24 @@ def update_status(ticket_id):
             "status_code": 400
         }), 400
 
+    target_status = norm_status if norm_status in ALL_CANONICAL_STATUSES else new_status
+    if not can_transition(complaint.status, target_status):
+        return jsonify({
+            "error": f"Illegal status transition from '{complaint.status}' to '{new_status}'.",
+            "status_code": 400
+        }), 400
+
     complaint.status = new_status if new_status in VALID_STATUSES else (norm_status or new_status)
+
+    if "department" in request.json:
+        dept = request.json["department"]
+        if dept and dept not in VALID_DEPARTMENTS:
+            return jsonify({
+                "error": f"Invalid department '{dept}'.",
+                "status_code": 400
+            }), 400
+        complaint.department = dept
+
     db.session.commit()
 
     publish_complaint_event(

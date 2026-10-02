@@ -602,101 +602,409 @@
         </button>
       </div>
 
-      <!-- UNLOCKED ADMIN DASHBOARD -->
-      <div id="admin-unlocked-view">
-        <div class="section-hero">
-          <h2 id="admin-heading">Municipal Operations Dashboard</h2>
-          <p>Real-time analytics, automated AI dispatch routing, and ticket resolution manager.</p>
-        </div>
-
-        <!-- STATS METRICS ROW -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-icon icon-blue">📊</div>
-            <div class="stat-info">
-              <span class="stat-number" id="stat-total">0</span>
-              <label class="stat-label">Total Complaints</label>
-            </div>
+      <!-- UNLOCKED ADMIN OPERATIONS CENTER -->
+      <div id="admin-unlocked-view" class="admin-center-layout">
+        <!-- TOP CONTROL BAR -->
+        <div class="admin-top-bar">
+          <div class="admin-brand-status">
+            <span class="admin-badge">MUNICIPAL OPERATIONS COMMAND CENTER</span>
+            <span class="live-indicator"><span class="pulse-dot"></span> LIVE SSE LINKED</span>
           </div>
-          <div class="stat-card">
-            <div class="stat-icon icon-amber">⏳</div>
-            <div class="stat-info">
-              <span class="stat-number" id="stat-open">0</span>
-              <label class="stat-label">Pending / Open</label>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon icon-green">✅</div>
-            <div class="stat-info">
-              <span class="stat-number" id="stat-resolved">0</span>
-              <label class="stat-label">Resolved Issues</label>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon icon-red">🚨</div>
-            <div class="stat-info">
-              <span class="stat-number" id="stat-high">0</span>
-              <label class="stat-label">High Severity Alerts</label>
-            </div>
+          <div class="admin-top-actions">
+            <span id="admin-user-display" class="admin-user-tag">Admin: System Operator</span>
+            <button class="btn btn-sm btn-outline" id="admin-refresh-all-btn" type="button">🔄 Refresh Data</button>
           </div>
         </div>
 
-        <!-- CHARTS ROW -->
-        <div class="charts-grid">
-          <div class="chart-card">
-            <h3>Severity Breakdown</h3>
-            <div class="chart-container">
-              <canvas id="severity-chart"></canvas>
+        <!-- PERSISTENT OPERATIONS NAVIGATION -->
+        <nav class="admin-nav-bar" id="admin-sub-nav" aria-label="Operations Navigation">
+          <button class="admin-nav-btn active" data-admin-view="overview" id="admin-btn-overview" type="button">
+            <span>📊</span> Overview
+          </button>
+          <button class="admin-nav-btn" data-admin-view="complaints" id="admin-btn-complaints" type="button">
+            <span>📋</span> Complaints Queue <span class="badge-count" id="admin-count-complaints">0</span>
+          </button>
+          <button class="admin-nav-btn" data-admin-view="processing" id="admin-btn-processing" type="button">
+            <span>🤖</span> AI Processing <span class="badge-count badge-count-warn hidden" id="admin-count-failed">0</span>
+          </button>
+          <button class="admin-nav-btn" data-admin-view="map" id="admin-btn-map" type="button">
+            <span>🗺️</span> Live Incident Map
+          </button>
+          <button class="admin-nav-btn" data-admin-view="departments" id="admin-btn-departments" type="button">
+            <span>🏛️</span> Departments
+          </button>
+          <button class="admin-nav-btn" data-admin-view="analytics" id="admin-btn-analytics" type="button">
+            <span>📈</span> Analytics
+          </button>
+          <button class="admin-nav-btn" data-admin-view="users" id="admin-btn-users" type="button">
+            <span>👥</span> Users
+          </button>
+          <button class="admin-nav-btn" data-admin-view="system" id="admin-btn-system" type="button">
+            <span>⚙️</span> System Health
+          </button>
+        </nav>
+
+        <!-- 1. OVERVIEW VIEW PANE -->
+        <div class="admin-view-pane" id="admin-view-overview">
+          <!-- 8 TOP-LEVEL OPERATIONAL METRICS -->
+          <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));">
+            <div class="stat-card">
+              <div class="stat-icon icon-blue">📊</div>
+              <div class="stat-info">
+                <span class="stat-number" id="adm-stat-total">0</span>
+                <label class="stat-label">Total Reports</label>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon icon-amber">📥</div>
+              <div class="stat-info">
+                <span class="stat-number" id="adm-stat-submitted">0</span>
+                <label class="stat-label">New / Queued</label>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon icon-blue">🤖</div>
+              <div class="stat-info">
+                <span class="stat-number" id="adm-stat-processing">0</span>
+                <label class="stat-label">AI Processing</label>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon icon-red">🚨</div>
+              <div class="stat-info">
+                <span class="stat-number" id="adm-stat-high">0</span>
+                <label class="stat-label">High Severity</label>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon icon-amber">⏳</div>
+              <div class="stat-info">
+                <span class="stat-number" id="adm-stat-verified">0</span>
+                <label class="stat-label">Awaiting Dispatch</label>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon icon-blue">🚚</div>
+              <div class="stat-info">
+                <span class="stat-number" id="adm-stat-inprogress">0</span>
+                <label class="stat-label">In Progress</label>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon icon-green">✅</div>
+              <div class="stat-info">
+                <span class="stat-number" id="adm-stat-resolved">0</span>
+                <label class="stat-label">Resolved</label>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon icon-red">⚠️</div>
+              <div class="stat-info">
+                <span class="stat-number" id="adm-stat-failed">0</span>
+                <label class="stat-label">Job Failures</label>
+              </div>
             </div>
           </div>
-          <div class="chart-card">
-            <h3>Department Workloads</h3>
-            <div class="chart-container">
-              <canvas id="department-chart"></canvas>
+
+          <!-- SPLIT: URGENT ATTENTION (60%) & LIVE OPERATIONS FEED (40%) -->
+          <div class="overview-split-grid">
+            <div class="urgent-box">
+              <div class="urgent-header">
+                <h3><span>🚨</span> Urgent Attention Queue</h3>
+                <span style="font-size: 0.78rem; color: var(--text-muted);">High Severity & Failed AI Triage</span>
+              </div>
+              <div class="table-responsive">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Ticket</th>
+                      <th>Issue</th>
+                      <th>Severity</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adm-urgent-tbody">
+                    <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Scanning operational backlog...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="feed-box">
+              <div class="feed-header">
+                <h3><span>⚡</span> Live Operations Feed</h3>
+                <span style="font-size: 0.75rem; color: var(--civic-emerald); font-weight: 700;">● STREAMING</span>
+              </div>
+              <div class="feed-stream-container" id="admin-feed-container">
+                <div class="feed-item">
+                  <div class="feed-item-top">
+                    <span class="feed-badge">SYSTEM</span>
+                    <span class="feed-time">Just now</span>
+                  </div>
+                  <div class="feed-msg">Operations center connected. Listening for real-time municipal events.</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- ADMIN INCIDENT MAP -->
-        <div class="admin-map-card">
-          <h3 style="margin-bottom: 0.75rem;">Incident Geographic Distribution</h3>
-          <div id="admin-map" class="interactive-map map-md"></div>
-        </div>
-
-        <!-- ADMIN COMPLAINTS TABLE -->
-        <div class="table-card">
-          <div class="table-header">
-            <h3>All Municipal Tickets</h3>
-            <div class="table-actions" style="display: flex; gap: 0.5rem;">
-              <select id="admin-filter-department" style="padding: 0.35rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+        <!-- 2. COMPLAINTS OPERATIONS QUEUE PANE -->
+        <div class="admin-view-pane hidden" id="admin-view-complaints">
+          <div class="admin-filter-bar">
+            <div class="form-group" style="grid-column: span 2;">
+              <label for="admin-search-input">Search Ticket / Location</label>
+              <input type="text" id="admin-search-input" placeholder="Search ticket #, street address, or landmark..." />
+            </div>
+            <div class="form-group">
+              <label for="admin-filter-status">Status</label>
+              <select id="admin-filter-status">
+                <option value="">All Statuses</option>
+                <option value="SUBMITTED">SUBMITTED (New)</option>
+                <option value="AI_PROCESSING">AI_PROCESSING</option>
+                <option value="VERIFIED">VERIFIED (Triage)</option>
+                <option value="ASSIGNED">ASSIGNED</option>
+                <option value="IN_PROGRESS">IN_PROGRESS</option>
+                <option value="RESOLVED">RESOLVED</option>
+                <option value="PROCESSING_FAILED">PROCESSING_FAILED</option>
+                <option value="DUPLICATE">DUPLICATE</option>
+                <option value="REJECTED">REJECTED</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="admin-filter-severity">Severity</label>
+              <select id="admin-filter-severity">
+                <option value="">All Severities</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="admin-filter-dept">Department</label>
+              <select id="admin-filter-dept">
                 <option value="">All Departments</option>
-                <option value="Sanitation Department">Sanitation</option>
-                <option value="Recycling Department">Recycling</option>
+                <option value="Sanitation Department">Sanitation Department</option>
+                <option value="Recycling Department">Recycling Department</option>
                 <option value="Health & Hazmat Department">Health & Hazmat</option>
                 <option value="Public Works Department">Public Works</option>
               </select>
-              <button id="refresh-admin-btn" class="btn btn-sm btn-secondary" type="button">🔄 Refresh</button>
+            </div>
+            <div class="form-group">
+              <label for="admin-filter-aimode">AI Mode</label>
+              <select id="admin-filter-aimode">
+                <option value="">All Modes</option>
+                <option value="REAL_YOLO">REAL_YOLO</option>
+                <option value="MOCK_DEMO">MOCK_DEMO</option>
+              </select>
             </div>
           </div>
 
-          <div class="table-responsive">
-            <table id="admin-table">
-              <thead>
-                <tr>
-                  <th>Ticket</th>
-                  <th>Date</th>
-                  <th>Submitted By</th>
-                  <th>Location</th>
-                  <th>Severity</th>
-                  <th>Department</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
+          <!-- COMPLAINTS DATA TABLE -->
+          <div class="civic-card" style="padding: 1rem;">
+            <div class="table-responsive">
+              <table id="admin-complaints-table">
+                <thead>
+                  <tr>
+                    <th>Ticket ID</th>
+                    <th>Date</th>
+                    <th>Citizen</th>
+                    <th>Location / Landmark</th>
+                    <th>AI Mode</th>
+                    <th>Severity</th>
+                    <th>Department</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-complaints-tbody"></tbody>
+              </table>
+            </div>
+
+            <!-- SERVER-SIDE PAGINATION BAR -->
+            <div class="pagination-bar" style="margin-top: 1rem;">
+              <span id="admin-page-info">Showing 0-0 of 0 complaints</span>
+              <div class="pagination-controls">
+                <button class="btn btn-secondary btn-sm" id="admin-page-prev" type="button" disabled>← Previous</button>
+                <span id="admin-page-current" style="font-weight: 700; padding: 0 0.5rem;">Page 1 of 1</span>
+                <button class="btn btn-secondary btn-sm" id="admin-page-next" type="button" disabled>Next →</button>
+              </div>
+            </div>
           </div>
         </div>
+
+        <!-- 3. AI PROCESSING CENTER PANE -->
+        <div class="admin-view-pane hidden" id="admin-view-processing">
+          <!-- MODE BANNER -->
+          <div class="civic-card" style="padding: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h3 style="font-size: 1.1rem; margin-bottom: 0.25rem;">AI Vision Inference & Job Pipeline</h3>
+              <p style="font-size: 0.85rem; color: var(--text-secondary);">
+                Complaints are analyzed by YOLOv8 models in background RQ workers to calculate waste class distribution and area severity.
+              </p>
+            </div>
+            <div id="admin-ai-mode-pill">
+              <span class="badge-mode-real" style="font-size: 0.85rem; padding: 0.35rem 0.75rem;">AI MODE: VERIFYING...</span>
+            </div>
+          </div>
+
+          <!-- QUEUE DATA TABLE -->
+          <div class="civic-card" style="padding: 1rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+              <h3 style="font-size: 1rem; font-weight: 700;">Active & Background Processing Jobs</h3>
+              <div style="display: flex; gap: 0.5rem;">
+                <select id="admin-proc-filter" style="padding: 0.35rem 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.85rem;">
+                  <option value="">All Job Stages</option>
+                  <option value="QUEUED">QUEUED</option>
+                  <option value="ANALYZING_IMAGE">ANALYZING_IMAGE</option>
+                  <option value="CALCULATING_SEVERITY">CALCULATING_SEVERITY</option>
+                  <option value="COMPLETED">COMPLETED</option>
+                  <option value="FAILED">FAILED (Only Errors)</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" id="admin-refresh-proc-btn" type="button">🔄 Refresh Queue</button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table id="admin-proc-table">
+                <thead>
+                  <tr>
+                    <th>Ticket</th>
+                    <th>Created</th>
+                    <th>AI Mode</th>
+                    <th>Processing Stage</th>
+                    <th>Duration</th>
+                    <th>Retries</th>
+                    <th>Diagnostics / Error</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-proc-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. LIVE INCIDENT MAP PANE -->
+        <div class="admin-view-pane hidden" id="admin-view-map">
+          <div class="civic-card" style="padding: 1rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.85rem;">
+              <div>
+                <h3 style="font-size: 1.05rem; font-weight: 700;">Municipal Incident Geographic Command Map</h3>
+                <span id="admin-map-count" style="font-size: 0.8rem; color: var(--text-secondary);">Plotting geolocated incidents...</span>
+              </div>
+              <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                <select id="admin-map-filter-dept" style="padding: 0.35rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.85rem;">
+                  <option value="">All Departments</option>
+                  <option value="Sanitation Department">Sanitation</option>
+                  <option value="Recycling Department">Recycling</option>
+                  <option value="Health & Hazmat Department">Health & Hazmat</option>
+                  <option value="Public Works Department">Public Works</option>
+                </select>
+                <select id="admin-map-filter-sev" style="padding: 0.35rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.85rem;">
+                  <option value="">All Severities</option>
+                  <option value="High">High Severity Only</option>
+                  <option value="Medium">Medium Severity</option>
+                  <option value="Low">Low Severity</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" id="admin-map-reload-btn" type="button">🔄 Refresh Pins</button>
+              </div>
+            </div>
+
+            <div id="admin-ops-map" class="interactive-map" style="height: 580px; width: 100%; border-radius: var(--radius-sm);"></div>
+          </div>
+        </div>
+
+        <!-- 5. DEPARTMENTS VIEW PANE -->
+        <div class="admin-view-pane hidden" id="admin-view-departments">
+          <div class="departments-grid" id="admin-departments-grid">
+            <!-- Dynamically populated via loadAdminDepartments() -->
+          </div>
+        </div>
+
+        <!-- 6. ANALYTICS VIEW PANE -->
+        <div class="admin-view-pane hidden" id="admin-view-analytics">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h3 style="font-size: 1.1rem; font-weight: 700;">Operational Analytics & Workload Trends</h3>
+              <p style="font-size: 0.85rem; color: var(--text-secondary);">Direct database-derived aggregations over configurable reporting periods.</p>
+            </div>
+            <div class="analytics-time-pills">
+              <button class="time-pill-btn" data-days="1" type="button">Today</button>
+              <button class="time-pill-btn active" data-days="7" type="button">7 Days</button>
+              <button class="time-pill-btn" data-days="30" type="button">30 Days</button>
+              <button class="time-pill-btn" data-days="90" type="button">90 Days</button>
+            </div>
+          </div>
+
+          <!-- CHARTS ROW 1 -->
+          <div class="charts-grid">
+            <div class="chart-card">
+              <h3>Incident Volume Inflow Timeline</h3>
+              <div class="chart-container">
+                <canvas id="chart-admin-timeline"></canvas>
+              </div>
+            </div>
+            <div class="chart-card">
+              <h3>Severity Distribution</h3>
+              <div class="chart-container">
+                <canvas id="severity-chart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- CHARTS ROW 2 -->
+          <div class="charts-grid">
+            <div class="chart-card">
+              <h3>Department Workload Allocation</h3>
+              <div class="chart-container">
+                <canvas id="department-chart"></canvas>
+              </div>
+            </div>
+            <div class="chart-card">
+              <h3>AI Inference & Success Outcomes</h3>
+              <div class="chart-container">
+                <canvas id="chart-admin-outcomes"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. USERS MANAGEMENT VIEW PANE -->
+        <div class="admin-view-pane hidden" id="admin-view-users">
+          <div class="civic-card" style="padding: 1.25rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+              <div>
+                <h3 style="font-size: 1.05rem; font-weight: 700;">Registered System Accounts</h3>
+                <p style="font-size: 0.85rem; color: var(--text-secondary);">Municipal officers and registered citizens with complaint submission history.</p>
+              </div>
+              <button class="btn btn-secondary btn-sm" id="admin-refresh-users-btn" type="button">🔄 Refresh Accounts</button>
+            </div>
+
+            <div class="table-responsive">
+              <table id="admin-users-table">
+                <thead>
+                  <tr>
+                    <th>User ID</th>
+                    <th>Username</th>
+                    <th>Email Address</th>
+                    <th>System Role</th>
+                    <th>Registered Date</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-users-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 8. SYSTEM HEALTH VIEW PANE -->
+        <div class="admin-view-pane hidden" id="admin-view-system">
+          <div class="system-health-grid" id="admin-system-health-grid">
+            <!-- Dynamically populated via loadAdminSystemHealth() -->
+          </div>
+        </div>
+
       </div>
     </section>
 
@@ -777,12 +1085,31 @@
   </div>
 
   <!-- ====================================================================
-       COMPLAINT DETAIL / LIFECYCLE TRACKING MODAL
+       COMPLAINT DETAIL / LIFECYCLE TRACKING MODAL (CITIZEN)
        ==================================================================== -->
   <div class="modal-overlay hidden" id="complaint-detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
     <div class="modal-card modal-lg">
       <button class="modal-close" id="close-detail-modal" type="button" aria-label="Close details">✕</button>
       <div id="detail-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       ADMIN INCIDENT INSPECTION & TRIAGE MODAL (PHASE 6)
+       ==================================================================== -->
+  <div class="modal-overlay hidden" id="admin-detail-modal" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title">
+    <div class="modal-card admin-inspector-card">
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <span style="font-size: 1.25rem;">🛡️</span>
+          <div>
+            <h3 id="admin-modal-title" style="font-size: 1.15rem; margin: 0;">Incident Inspection</h3>
+            <span id="admin-modal-ticket-id" style="font-size: 0.8rem; color: var(--text-secondary);">Ticket ID</span>
+          </div>
+        </div>
+        <button class="modal-close" id="close-admin-modal" type="button" aria-label="Close incident inspection">✕</button>
+      </div>
+      <div id="admin-modal-body"></div>
     </div>
   </div>
 

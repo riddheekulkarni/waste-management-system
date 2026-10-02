@@ -96,6 +96,7 @@ class Complaint(db.Model):
         mode_label = "REAL AI / YOLOv8" if mode == "REAL_YOLO" else "DEMO / MOCK DETECTION"
 
         data = {
+            "id": self.id,
             "ticket_id": self.id,
             "user_id": self.user_id,
             "submitted_by": self.user.username if self.user else "Citizen (Guest)",

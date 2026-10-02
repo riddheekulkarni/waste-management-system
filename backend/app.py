@@ -7,6 +7,7 @@ from flask import Flask, jsonify, request, send_from_directory, session
 from config import Config
 from extensions import limiter, migrate
 from models import Complaint, User, db
+from routes.admin import admin_bp
 from routes.analytics import analytics_bp
 from routes.auth import auth_bp
 from routes.complaints import complaints_bp
@@ -43,6 +44,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(complaints_bp)
     app.register_blueprint(analytics_bp)
+    app.register_blueprint(admin_bp)
 
     # ── CLI Commands ───────────────────────────────────────────────────────
     @app.cli.command("seed-db")
