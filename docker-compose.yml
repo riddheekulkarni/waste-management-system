@@ -30,6 +30,8 @@ services:
       - RATELIMIT_ENABLED=${RATELIMIT_ENABLED:-true}
       - RATELIMIT_STORAGE_URL=${RATELIMIT_STORAGE_URL:-memory://}
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-16}
+      - REDIS_URL=redis://redis:6379/0
+      - ASYNC_MODE=redis
     volumes:
       # Mount the trained model weights file into the container when available.
       # Point WASTE_MODEL_WEIGHTS at /models/best.pt in your .env file.
@@ -39,6 +41,44 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: python backend/worker.py
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - ASYNC_MODE=redis
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - WASTE_MODEL_WEIGHTS=${WASTE_MODEL_WEIGHTS:-}
+      - AI_EXECUTION_MODE=${AI_EXECUTION_MODE:-REAL_YOLO}
+    volumes:
+      - ${MODEL_WEIGHTS_DIR:-./models}:/models:ro
+      - complaint_uploads:/app/backend/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   db:
@@ -61,3 +101,4 @@ services:
 volumes:
   postgres_data:
   complaint_uploads:
+  redis_data:

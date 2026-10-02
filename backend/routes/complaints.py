@@ -1,27 +1,49 @@
+import math
 import os
 import uuid
-from flask import Blueprint, current_app, jsonify, request, session
+from flask import Blueprint, Response, current_app, jsonify, request, session
+from PIL import Image
 from werkzeug.utils import secure_filename
 
+from ai_config import CANONICAL_DEPARTMENT_MAP
+from events import (
+    EVENT_COMPLAINT_SUBMITTED,
+    EVENT_STAGE_CHANGED,
+    EVENT_STATUS_CHANGED,
+    publish_complaint_event,
+    subscribe_admin_events,
+    subscribe_complaint_events,
+)
 from extensions import limiter
-from detection import WasteDetector
+from lifecycle import (
+    ALL_CANONICAL_STATUSES,
+    ALL_PROCESSING_STAGES,
+    STAGE_ANALYZING_IMAGE,
+    STAGE_ASSIGNING_DEPARTMENT,
+    STAGE_CALCULATING_SEVERITY,
+    STAGE_CHECKING_DUPLICATES,
+    STAGE_COMPLETED,
+    STAGE_FAILED,
+    STAGE_QUEUED,
+    STATUS_AI_PROCESSING,
+    STATUS_DUPLICATE,
+    STATUS_PROCESSING_FAILED,
+    STATUS_VERIFIED,
+    can_transition,
+    normalize_status,
+)
 from models import Complaint, DetectionItem, db
 from notifications import notify_citizen
-from routes.auth import require_role
-from routing import determine_department
-from severity import compute_severity
+from job_queue import enqueue_complaint_job
+from routes.auth import login_required, require_role
+from tasks import find_nearby_duplicate
 
 complaints_bp = Blueprint("complaints", __name__, url_prefix="/api/complaints")
 
-_detector = None
-
-
-def get_detector() -> WasteDetector:
-    """Lazily build the detector once, using the weights path from config."""
-    global _detector
-    if _detector is None:
-        _detector = WasteDetector(weights_path=current_app.config.get("WASTE_MODEL_WEIGHTS"))
-    return _detector
+VALID_STATUSES = ALL_CANONICAL_STATUSES | {"Open", "In Progress", "Resolved", "Closed"}
+VALID_SEVERITIES = {"Low", "Medium", "High", "PENDING"}
+VALID_DEPARTMENTS = set(CANONICAL_DEPARTMENT_MAP.values()) | {"PENDING_TRIAGE"}
+MAX_PER_PAGE = 100
 
 
 def allowed_file(filename: str) -> bool:
@@ -29,94 +51,119 @@ def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed
 
 
-def find_nearby_duplicate(lat: float, lng: float, radius_meters: float = 50.0):
-    """Find recent open complaint within radius_meters."""
-    if lat is None or lng is None:
-        return None
-
-    open_complaints = Complaint.query.filter(
-        Complaint.status != "Resolved",
-        Complaint.latitude.isnot(None),
-        Complaint.longitude.isnot(None)
-    ).all()
-
-    for c in open_complaints:
-        dist = Complaint.haversine_distance(lat, lng, c.latitude, c.longitude)
-        if dist <= radius_meters:
-            return c
-    return None
-
-
 @complaints_bp.route("/upload", methods=["POST"])
+@login_required
 @limiter.limit("10 per hour", error_message="Upload rate limit exceeded. Maximum 10 uploads per hour per IP.")
 def upload_complaint():
+    """
+    Submits a new waste complaint for asynchronous AI processing.
+    Validates inputs and image file, creates the complaint record in AI_PROCESSING,
+    enqueues the background job, and returns the ticket immediately.
+    """
     if "image" not in request.files:
-        return jsonify({"error": "No image file provided (field name 'image')"}), 400
+        return jsonify({"error": "No image file provided (field name 'image')", "status_code": 400}), 400
 
     image_file = request.files["image"]
-    if image_file.filename == "":
-        return jsonify({"error": "Empty filename"}), 400
+    if not image_file or image_file.filename == "":
+        return jsonify({"error": "Empty filename provided.", "status_code": 400}), 400
 
     if not allowed_file(image_file.filename):
-        return jsonify({"error": "Invalid file type. Allowed formats: PNG, JPG, JPEG, WEBP, GIF."}), 400
+        return jsonify({"error": "Invalid file type. Allowed formats: PNG, JPG, JPEG, WEBP.", "status_code": 400}), 400
+
+    # Validate coordinate inputs
+    raw_lat = request.form.get("latitude")
+    raw_lng = request.form.get("longitude")
+    latitude = None
+    longitude = None
+
+    if raw_lat is not None and str(raw_lat).strip() != "":
+        try:
+            latitude = float(raw_lat)
+            if not (-90.0 <= latitude <= 90.0):
+                return jsonify({"error": "Latitude must be between -90.0 and 90.0 degrees.", "status_code": 400}), 400
+        except ValueError:
+            return jsonify({"error": "Invalid latitude value. Must be a valid float.", "status_code": 400}), 400
+
+    if raw_lng is not None and str(raw_lng).strip() != "":
+        try:
+            longitude = float(raw_lng)
+            if not (-180.0 <= longitude <= 180.0):
+                return jsonify({"error": "Longitude must be between -180.0 and 180.0 degrees.", "status_code": 400}), 400
+        except ValueError:
+            return jsonify({"error": "Invalid longitude value. Must be a valid float.", "status_code": 400}), 400
+
+    address = request.form.get("address", "").strip()
+    if address and len(address) > 500:
+        address = address[:500]
 
     safe_fname = secure_filename(image_file.filename) or "waste_upload.jpg"
     filename = f"{uuid.uuid4().hex}_{safe_fname}"
     save_path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
     image_file.save(save_path)
 
-    detector = get_detector()
-    if not detector.validate_image(save_path):
+    # Validate image decoding
+    try:
+        with Image.open(save_path) as img:
+            img.verify()
+    except Exception:
         if os.path.exists(save_path):
             os.remove(save_path)
-        return jsonify({"error": "Uploaded file is not a valid or readable image."}), 400
-
-    latitude = request.form.get("latitude", type=float)
-    longitude = request.form.get("longitude", type=float)
-    address = request.form.get("address", type=str)
+        return jsonify({"error": "Uploaded file is not a valid or readable image.", "status_code": 400}), 400
 
     user_id = session.get("user_id")
+    configured_ai_mode = current_app.config.get("AI_EXECUTION_MODE", "REAL_YOLO")
 
-    detections, image_size = detector.detect(save_path)
-    severity = compute_severity(detections, image_size)
-    department = determine_department(detections)
-
-    # Duplicate complaint check
-    duplicate_ticket = find_nearby_duplicate(latitude, longitude, radius_meters=50.0)
-    is_duplicate = duplicate_ticket is not None
-    duplicate_of_id = duplicate_ticket.id if duplicate_ticket else None
-
+    # Create complaint record in AI_PROCESSING status
     complaint = Complaint(
         user_id=user_id,
         image_path=filename,
-        address=address,
+        address=address or "Location specified on map",
         latitude=latitude,
         longitude=longitude,
-        severity_level=severity["level"],
-        coverage_ratio=severity["coverage_ratio"],
-        item_count=severity["item_count"],
-        department=department,
-        status="Open",
-        is_duplicate=is_duplicate,
-        duplicate_of_id=duplicate_of_id,
+        severity_level=None,
+        coverage_ratio=None,
+        item_count=None,
+        department=None,
+        status=STATUS_AI_PROCESSING,
+        processing_status=STAGE_QUEUED,
+        is_duplicate=False,
+        duplicate_of_id=None,
+        ai_mode=configured_ai_mode,
     )
     complaint.id = str(uuid.uuid4())[:8]
-
-    for d in detections:
-        complaint.detections.append(DetectionItem(
-            cls=d.cls, confidence=d.confidence,
-            x1=d.box[0], y1=d.box[1], x2=d.box[2], y2=d.box[3],
-        ))
 
     db.session.add(complaint)
     db.session.commit()
 
+    publish_complaint_event(
+        complaint.id,
+        EVENT_COMPLAINT_SUBMITTED,
+        {
+            "status": complaint.status,
+            "processing_status": complaint.processing_status,
+            "stage": complaint.processing_status,
+            "ai_mode": complaint.ai_mode,
+            "progress_message": "Complaint submitted and queued for AI analysis",
+        },
+        app=current_app._get_current_object(),
+    )
+
+    # Enqueue background job (or run synchronously in tests/sync mode)
+    job_id = enqueue_complaint_job(complaint.id)
+
+    # Refresh complaint in case sync worker executed immediately
+    db.session.refresh(complaint)
+
     res_data = complaint.to_dict()
-    if is_duplicate:
-        res_data["duplicate_warning"] = (
-            f"Note: An existing complaint (Ticket #{duplicate_of_id}) was reported nearby. "
-            "Your ticket has been linked to prevent redundant municipal dispatches."
-        )
+    res_data.update({
+        "success": True,
+        "ticket_id": complaint.id,
+        "complaint_id": complaint.id,
+        "status": complaint.status,
+        "processing_status": complaint.processing_status,
+        "job_id": str(job_id) if job_id else None,
+        "message": "Your complaint has been submitted and is being analyzed.",
+    })
 
     return jsonify(res_data), 201
 
@@ -125,13 +172,21 @@ def upload_complaint():
 @limiter.limit("30 per minute", error_message="Too many duplicate checks. Please slow down.")
 def check_duplicate():
     data = request.get_json() or {}
-    lat = data.get("latitude")
-    lng = data.get("longitude")
+    lat_val = data.get("latitude")
+    lng_val = data.get("longitude")
 
-    if lat is None or lng is None:
+    if lat_val is None or lng_val is None:
         return jsonify({"is_duplicate": False, "nearby_ticket": None})
 
-    duplicate = find_nearby_duplicate(float(lat), float(lng), radius_meters=50.0)
+    try:
+        lat = float(lat_val)
+        lng = float(lng_val)
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+            return jsonify({"error": "Coordinates out of bounds.", "status_code": 400}), 400
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid latitude or longitude values.", "status_code": 400}), 400
+
+    duplicate = find_nearby_duplicate(lat, lng, radius_meters=50.0)
     if duplicate:
         return jsonify({
             "is_duplicate": True,
@@ -142,59 +197,382 @@ def check_duplicate():
 
 
 @complaints_bp.route("", methods=["GET"])
+@login_required
 def list_complaints():
     query = Complaint.query
+    user_id = session.get("user_id")
+    role = session.get("role")
+
+    # Citizen access is strictly scoped to their own complaints
+    if role == "citizen":
+        query = query.filter_by(user_id=user_id)
 
     status = request.args.get("status")
+    processing_status = request.args.get("processing_status")
     department = request.args.get("department")
     severity_level = request.args.get("severity")
-    only_mine = request.args.get("my_complaints")
+    ai_mode = request.args.get("ai_mode")
 
-    if only_mine and session.get("user_id"):
-        query = query.filter_by(user_id=session.get("user_id"))
-
+    # Filter parameter validations
     if status:
-        query = query.filter_by(status=status)
+        norm_status = normalize_status(status)
+        if norm_status not in VALID_STATUSES and status not in VALID_STATUSES:
+            return jsonify({
+                "error": f"Invalid status filter '{status}'.",
+                "status_code": 400
+            }), 400
+        query = query.filter((Complaint.status == status) | (Complaint.status == norm_status))
+
+    if processing_status:
+        upper_proc = processing_status.upper()
+        if upper_proc not in ALL_PROCESSING_STAGES:
+            return jsonify({
+                "error": f"Invalid processing_status filter '{processing_status}'.",
+                "status_code": 400
+            }), 400
+        query = query.filter_by(processing_status=upper_proc)
+
     if department:
+        if department not in VALID_DEPARTMENTS:
+            return jsonify({
+                "error": f"Invalid department filter '{department}'.",
+                "status_code": 400
+            }), 400
         query = query.filter_by(department=department)
+
     if severity_level:
+        if severity_level not in VALID_SEVERITIES:
+            return jsonify({
+                "error": f"Invalid severity filter '{severity_level}'.",
+                "status_code": 400
+            }), 400
         query = query.filter_by(severity_level=severity_level)
 
-    complaints = query.order_by(Complaint.created_at.desc()).all()
-    return jsonify([c.to_dict(include_detections=True) for c in complaints])
+    if ai_mode:
+        query = query.filter_by(ai_mode=ai_mode)
+
+    # Server-Side Pagination
+    raw_page = request.args.get("page", 1)
+    raw_per_page = request.args.get("per_page", 20)
+
+    try:
+        page = int(raw_page)
+        per_page = int(raw_per_page)
+    except (ValueError, TypeError):
+        return jsonify({
+            "error": "Pagination parameters 'page' and 'per_page' must be valid integers.",
+            "status_code": 400
+        }), 400
+
+    if page < 1:
+        return jsonify({"error": "page parameter must be greater than or equal to 1.", "status_code": 400}), 400
+    if per_page < 1:
+        return jsonify({"error": "per_page parameter must be greater than or equal to 1.", "status_code": 400}), 400
+
+    per_page = min(per_page, MAX_PER_PAGE)
+
+    total = query.count()
+    pages = max(1, math.ceil(total / per_page)) if total > 0 else 1
+
+    complaints = (
+        query.order_by(Complaint.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    items = [c.to_dict(include_detections=True) for c in complaints]
+    return jsonify({
+        "items": items,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "pages": pages,
+    })
 
 
 @complaints_bp.route("/<ticket_id>", methods=["GET"])
+@login_required
 def get_complaint(ticket_id):
-    complaint = db.session.get(Complaint, ticket_id)
+    safe_id = str(ticket_id).strip()
+    if not safe_id or len(safe_id) > 16:
+        return jsonify({"error": "Invalid ticket ID format.", "status_code": 400}), 400
+
+    complaint = db.session.get(Complaint, safe_id)
     if not complaint:
-        return jsonify({"error": "Ticket not found"}), 404
+        return jsonify({"error": "Ticket not found.", "status_code": 404}), 404
+
+    # Authorization Check: Citizen may strictly view only their own ticket
+    role = session.get("role")
+    user_id = session.get("user_id")
+
+    if role != "admin" and complaint.user_id != user_id:
+        return jsonify({
+            "error": "Access denied. You may only view your own complaints.",
+            "status_code": 403
+        }), 403
+
     return jsonify(complaint.to_dict())
+
+
+@complaints_bp.route("/<ticket_id>/processing-status", methods=["GET"])
+@login_required
+def get_processing_status(ticket_id):
+    """
+    Lightweight endpoint returning live AI job progress and stage information.
+    """
+    safe_id = str(ticket_id).strip()
+    if not safe_id or len(safe_id) > 16:
+        return jsonify({"error": "Invalid ticket ID format.", "status_code": 400}), 400
+
+    complaint = db.session.get(Complaint, safe_id)
+    if not complaint:
+        return jsonify({"error": "Ticket not found.", "status_code": 404}), 404
+
+    role = session.get("role")
+    user_id = session.get("user_id")
+
+    if role != "admin" and complaint.user_id != user_id:
+        return jsonify({
+            "error": "Access denied. You may only view your own complaints.",
+            "status_code": 403
+        }), 403
+
+    stage_descriptions = {
+        STAGE_QUEUED: "Waiting in queue for AI processing",
+        STAGE_ANALYZING_IMAGE: "Analyzing uploaded image",
+        STAGE_CALCULATING_SEVERITY: "Calculating severity score",
+        STAGE_CHECKING_DUPLICATES: "Checking for nearby duplicate reports",
+        STAGE_ASSIGNING_DEPARTMENT: "Routing to responsible municipal department",
+        STAGE_COMPLETED: "AI analysis completed",
+        STAGE_FAILED: "AI analysis failed",
+    }
+
+    return jsonify({
+        "ticket_id": complaint.id,
+        "status": complaint.status,
+        "processing_status": complaint.processing_status,
+        "stage": complaint.processing_status,
+        "progress": stage_descriptions.get(complaint.processing_status, complaint.processing_status),
+        "ai_mode": complaint.ai_mode,
+        "duration_ms": complaint.processing_duration_ms,
+        "retry_count": complaint.retry_count,
+        "error": complaint.processing_error,
+    }), 200
+
+
+@complaints_bp.route("/<ticket_id>/retry-processing", methods=["POST"])
+@require_role("admin")
+def retry_processing(ticket_id):
+    """
+    Admin-only endpoint to re-enqueue a failed complaint for AI analysis.
+    Protects against simultaneous duplicate execution.
+    """
+    safe_id = str(ticket_id).strip()
+    if not safe_id or len(safe_id) > 16:
+        return jsonify({"error": "Invalid ticket ID format.", "status_code": 400}), 400
+
+    complaint = db.session.get(Complaint, safe_id)
+    if not complaint:
+        return jsonify({"error": "Ticket not found.", "status_code": 404}), 404
+
+    # Prevent concurrent processing jobs
+    active_stages = {
+        STAGE_ANALYZING_IMAGE,
+        STAGE_CALCULATING_SEVERITY,
+        STAGE_CHECKING_DUPLICATES,
+        STAGE_ASSIGNING_DEPARTMENT,
+    }
+    if complaint.processing_status in active_stages:
+        return jsonify({
+            "error": f"Complaint is already actively processing in stage '{complaint.processing_status}'.",
+            "status_code": 409
+        }), 409
+
+    # Re-arm complaint for processing
+    complaint.status = STATUS_AI_PROCESSING
+    complaint.processing_status = STAGE_QUEUED
+    complaint.processing_error = None
+    complaint.retry_count = (complaint.retry_count or 0) + 1
+    db.session.commit()
+
+    publish_complaint_event(
+        complaint.id,
+        EVENT_STAGE_CHANGED,
+        {
+            "status": complaint.status,
+            "processing_status": complaint.processing_status,
+            "stage": complaint.processing_status,
+            "retry_count": complaint.retry_count,
+            "progress_message": f"AI processing job re-enqueued for retry attempt {complaint.retry_count}",
+        },
+        app=current_app._get_current_object(),
+    )
+
+    job_id = enqueue_complaint_job(complaint.id)
+    db.session.refresh(complaint)
+
+    return jsonify({
+        "success": True,
+        "ticket_id": complaint.id,
+        "status": complaint.status,
+        "processing_status": complaint.processing_status,
+        "retry_count": complaint.retry_count,
+        "job_id": str(job_id) if job_id else None,
+        "message": "AI processing job re-enqueued successfully.",
+    }), 200
+
+
+@complaints_bp.route("/admin/queue", methods=["GET"])
+@require_role("admin")
+def admin_processing_queue():
+    """
+    Admin endpoint providing visibility into queued, active, completed, and failed AI jobs.
+    """
+    query = Complaint.query
+
+    proc_status = request.args.get("processing_status")
+    if proc_status:
+        query = query.filter_by(processing_status=proc_status.upper())
+
+    ai_mode = request.args.get("ai_mode")
+    if ai_mode:
+        query = query.filter_by(ai_mode=ai_mode)
+
+    raw_page = request.args.get("page", 1)
+    raw_per_page = request.args.get("per_page", 20)
+
+    try:
+        page = max(1, int(raw_page))
+        per_page = min(MAX_PER_PAGE, max(1, int(raw_per_page)))
+    except (ValueError, TypeError):
+        page, per_page = 1, 20
+
+    total = query.count()
+    pages = max(1, math.ceil(total / per_page)) if total > 0 else 1
+
+    complaints = (
+        query.order_by(Complaint.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    items = []
+    for c in complaints:
+        item = c.to_dict(include_detections=False)
+        item["retryable"] = c.status in (STATUS_PROCESSING_FAILED, "FAILED") or c.processing_status == STAGE_FAILED
+        items.append(item)
+
+    return jsonify({
+        "items": items,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "pages": pages,
+    }), 200
 
 
 @complaints_bp.route("/<ticket_id>/status", methods=["PATCH"])
 @require_role("admin")
 def update_status(ticket_id):
-    if not request.is_json or "status" not in request.json:
-        return jsonify({"error": "Provide JSON body: {'status': '...'}"}), 400
+    safe_id = str(ticket_id).strip()
+    if not safe_id or len(safe_id) > 16:
+        return jsonify({"error": "Invalid ticket ID format.", "status_code": 400}), 400
 
-    complaint = db.session.get(Complaint, ticket_id)
+    if not request.is_json or "status" not in request.json:
+        return jsonify({"error": "Provide JSON body with 'status' field.", "status_code": 400}), 400
+
+    complaint = db.session.get(Complaint, safe_id)
     if not complaint:
-        return jsonify({"error": "Ticket not found"}), 404
+        return jsonify({"error": "Ticket not found.", "status_code": 404}), 404
 
     new_status = request.json["status"]
-    if new_status not in ("Open", "In Progress", "Resolved"):
-        return jsonify({"error": "status must be Open, In Progress, or Resolved"}), 400
+    norm_status = normalize_status(new_status)
 
-    complaint.status = new_status
+    if norm_status not in VALID_STATUSES and new_status not in VALID_STATUSES:
+        return jsonify({
+            "error": f"Invalid status '{new_status}'.",
+            "status_code": 400
+        }), 400
+
+    complaint.status = new_status if new_status in VALID_STATUSES else (norm_status or new_status)
     db.session.commit()
 
-    # Resolve the citizen's email so the notification engine can deliver to them.
+    publish_complaint_event(
+        complaint.id,
+        EVENT_STATUS_CHANGED,
+        {
+            "status": complaint.status,
+            "processing_status": complaint.processing_status,
+            "stage": complaint.processing_status,
+            "department": complaint.department,
+            "severity": complaint.severity_level,
+            "progress_message": f"Complaint status updated to {complaint.status}",
+        },
+        app=current_app._get_current_object(),
+    )
+
     recipient_email = complaint.user.email if complaint.user else None
-    notification_result = notify_citizen(complaint.id, new_status, recipient_email=recipient_email)
+    notification_result = notify_citizen(complaint.id, complaint.status, recipient_email=recipient_email)
     res_dict = complaint.to_dict()
     res_dict["notification"] = notification_result
 
     return jsonify(res_dict)
 
 
+@complaints_bp.route("/<ticket_id>/events", methods=["GET"])
+@login_required
+def complaint_events(ticket_id):
+    """
+    Server-Sent Events endpoint streaming real-time status and stage updates for a complaint.
+    Strictly role-protected: Citizens can only stream their own complaint.
+    Admins may stream any complaint.
+    """
+    safe_id = str(ticket_id).strip()
+    if not safe_id or len(safe_id) > 16:
+        return jsonify({"error": "Invalid ticket ID format.", "status_code": 400}), 400
+
+    complaint = db.session.get(Complaint, safe_id)
+    if not complaint:
+        return jsonify({"error": "Ticket not found.", "status_code": 404}), 404
+
+    role = session.get("role")
+    user_id = session.get("user_id")
+
+    if role != "admin" and complaint.user_id != user_id:
+        return jsonify({
+            "error": "Access denied. You may only subscribe to events for your own complaints.",
+            "status_code": 403
+        }), 403
+
+    response = Response(
+        subscribe_complaint_events(
+            ticket_id=complaint.id,
+            app=current_app._get_current_object(),
+            user_role=role,
+        ),
+        mimetype="text/event-stream"
+    )
+    response.headers["Cache-Control"] = "no-cache, no-transform"
+    response.headers["X-Accel-Buffering"] = "no"
+    response.headers["Connection"] = "keep-alive"
+    return response
+
+
+@complaints_bp.route("/admin/events", methods=["GET"])
+@require_role("admin")
+def admin_events():
+    """
+    Server-Sent Events stream for administrators broadcasting all municipal complaint updates.
+    """
+    response = Response(
+        subscribe_admin_events(
+            app=current_app._get_current_object(),
+        ),
+        mimetype="text/event-stream"
+    )
+    response.headers["Cache-Control"] = "no-cache, no-transform"
+    response.headers["X-Accel-Buffering"] = "no"
+    response.headers["Connection"] = "keep-alive"
+    return response

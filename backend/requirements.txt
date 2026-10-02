@@ -1,11 +1,14 @@
 flask
 flask-sqlalchemy
+flask-migrate>=4.0,<5
 flask-limiter>=3.5,<4
 werkzeug
 pillow
 gunicorn
 pytest
 psycopg2-binary
+redis>=5.0.0
+rq>=1.15.0
 
 # YOLOv8 inference — required when WASTE_MODEL_WEIGHTS is set.
 # See train_waste_yolov8.ipynb (project root) to produce best.pt.

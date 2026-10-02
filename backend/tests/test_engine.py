@@ -41,6 +41,7 @@ def test_severity_engine():
 
 def test_mock_detector():
     detector = WasteDetector(mode="mock")
-    detections, img_size = detector.detect("dummy_path.jpg")
+    detections, img_size, ai_mode = detector.detect("dummy_path.jpg")
     assert len(detections) >= 1
     assert img_size == (1280, 960)
+    assert ai_mode == "MOCK_DEMO"

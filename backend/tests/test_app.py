@@ -42,16 +42,24 @@ def test_auth_register_and_login(client):
     assert login_res.get_json()["user"]["username"] == "newuser"
 
 
-def test_invalid_image_upload(client):
+def test_unauthenticated_upload_rejected(client):
+    img_bytes = create_dummy_image_bytes()
+    data = {"image": (img_bytes, "test.jpg")}
+    res = client.post("/api/complaints/upload", data=data, content_type="multipart/form-data")
+    assert res.status_code == 401
+    assert "error" in res.get_json()
+
+
+def test_invalid_image_upload(citizen_client):
     data = {
         "image": (io.BytesIO(b"not an image file content"), "test.txt")
     }
-    res = client.post("/api/complaints/upload", data=data, content_type="multipart/form-data")
+    res = citizen_client.post("/api/complaints/upload", data=data, content_type="multipart/form-data")
     assert res.status_code == 400
     assert "error" in res.get_json()
 
 
-def test_valid_complaint_upload_and_duplicate_detection(client):
+def test_valid_complaint_upload_and_duplicate_detection(citizen_client):
     img_bytes = create_dummy_image_bytes()
     data = {
         "image": (img_bytes, "test_waste.jpg"),
@@ -60,14 +68,14 @@ def test_valid_complaint_upload_and_duplicate_detection(client):
         "address": "Central Pune Street"
     }
 
-    res1 = client.post("/api/complaints/upload", data=data, content_type="multipart/form-data")
+    res1 = citizen_client.post("/api/complaints/upload", data=data, content_type="multipart/form-data")
     assert res1.status_code == 201
     ticket1 = res1.get_json()
     assert ticket1["is_duplicate"] is False
     ticket1_id = ticket1["ticket_id"]
 
     # Check duplicate endpoint
-    check_res = client.post("/api/complaints/check-duplicate", json={
+    check_res = citizen_client.post("/api/complaints/check-duplicate", json={
         "latitude": 18.52041,
         "longitude": 73.85671
     })
@@ -82,7 +90,7 @@ def test_valid_complaint_upload_and_duplicate_detection(client):
         "longitude": 73.85671,
         "address": "Central Pune Street (Near)"
     }
-    res2 = client.post("/api/complaints/upload", data=data2, content_type="multipart/form-data")
+    res2 = citizen_client.post("/api/complaints/upload", data=data2, content_type="multipart/form-data")
     assert res2.status_code == 201
     ticket2 = res2.get_json()
     assert ticket2["is_duplicate"] is True

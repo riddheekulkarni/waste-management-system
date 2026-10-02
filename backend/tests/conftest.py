@@ -84,20 +84,22 @@ def client(app):
 
 
 @pytest.fixture(scope="function")
-def admin_client(client):
+def admin_client(app):
     """Return a test client pre-authenticated as admin."""
-    client.post(
+    c = app.test_client()
+    c.post(
         "/api/auth/login",
         json={"identifier": "testadmin", "password": "adminpass"},
     )
-    return client
+    return c
 
 
 @pytest.fixture(scope="function")
-def citizen_client(client):
+def citizen_client(app):
     """Return a test client pre-authenticated as citizen."""
-    client.post(
+    c = app.test_client()
+    c.post(
         "/api/auth/login",
         json={"identifier": "testcitizen", "password": "citizenpass"},
     )
-    return client
+    return c

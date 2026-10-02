@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, session
+from flask import Blueprint, jsonify
 from sqlalchemy import func
 
 from models import Complaint, db
@@ -24,6 +24,10 @@ def summary():
         db.session.query(Complaint.status, func.count(Complaint.id))
         .group_by(Complaint.status).all()
     )
+    raw_ai_mode = dict(
+        db.session.query(Complaint.ai_mode, func.count(Complaint.id))
+        .group_by(Complaint.ai_mode).all()
+    )
 
     by_severity = {"Low": 0, "Medium": 0, "High": 0}
     by_severity.update({k: v for k, v in raw_severity.items() if k})
@@ -39,11 +43,16 @@ def summary():
     }
     by_department.update({k: v for k, v in raw_department.items() if k})
 
+    by_ai_mode = {"REAL_YOLO": 0, "MOCK_DEMO": 0}
+    by_ai_mode.update({k: v for k, v in raw_ai_mode.items() if k})
+
     return jsonify({
         "total_complaints": total,
         "by_severity": by_severity,
         "by_department": by_department,
         "by_status": by_status,
+        "by_ai_mode": by_ai_mode,
+        "status_code": 200
     })
 
 
@@ -64,7 +73,7 @@ def geo_analytics():
         "status": c.status,
         "address": c.address,
         "is_duplicate": c.is_duplicate,
+        "ai_mode": c.ai_mode or "MOCK_DEMO",
     } for c in complaints]
 
-    return jsonify({"count": len(points), "points": points})
-
+    return jsonify({"count": len(points), "points": points, "status_code": 200})
