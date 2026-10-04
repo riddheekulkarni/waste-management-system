@@ -1,15 +1,19 @@
+import re
 from functools import wraps
 from flask import Blueprint, jsonify, request, session
 from models import User, db
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+USERNAME_REGEX = re.compile(r"^[a-zA-Z0-9_.-]{3,80}$")
+
 
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get("user_id"):
-            return jsonify({"error": "Authentication required."}), 401
+            return jsonify({"error": "Authentication required.", "status_code": 401}), 401
         return f(*args, **kwargs)
     return decorated_function
 
@@ -19,9 +23,9 @@ def require_role(role):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             if not session.get("user_id"):
-                return jsonify({"error": "Authentication required."}), 401
+                return jsonify({"error": "Authentication required.", "status_code": 401}), 401
             if session.get("role") != role:
-                return jsonify({"error": f"{role.capitalize()} access required."}), 403
+                return jsonify({"error": f"{role.capitalize()} access required.", "status_code": 403}), 403
             return f(*args, **kwargs)
         return decorated_function
     return decorator
@@ -30,22 +34,29 @@ def require_role(role):
 @auth_bp.route("/register", methods=["POST"])
 def register():
     data = request.get_json() or {}
-    username = data.get("username", "").strip()
-    email = data.get("email", "").strip().lower()
-    password = data.get("password", "")
-    role = data.get("role", "citizen").strip().lower()
+    username = str(data.get("username", "")).strip()
+    email = str(data.get("email", "")).strip().lower()
+    password = str(data.get("password", ""))
 
     if not username or not email or not password:
-        return jsonify({"error": "Username, email, and password are required."}), 400
+        return jsonify({"error": "Username, email, and password are required.", "status_code": 400}), 400
 
-    # Restrict registration to citizen role only via API endpoint (admin must be pre-created or initialized)
-    if role != "citizen":
-        role = "citizen"
+    if not USERNAME_REGEX.match(username):
+        return jsonify({
+            "error": "Username must be 3-80 characters long and contain only letters, numbers, underscores, dashes, or dots.",
+            "status_code": 400
+        }), 400
+
+    if not EMAIL_REGEX.match(email) or len(email) > 120:
+        return jsonify({"error": "Invalid email address format.", "status_code": 400}), 400
+
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters long.", "status_code": 400}), 400
 
     if User.query.filter((User.username == username) | (User.email == email)).first():
-        return jsonify({"error": "User with this username or email already exists."}), 400
+        return jsonify({"error": "User with this username or email already exists.", "status_code": 400}), 400
 
-    user = User(username=username, email=email, role=role)
+    user = User(username=username, email=email, role="citizen")
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
@@ -53,39 +64,81 @@ def register():
     session["user_id"] = user.id
     session["role"] = user.role
 
-    return jsonify({"message": "Registration successful", "user": user.to_dict()}), 201
+    return jsonify({
+        "message": "Registration successful",
+        "user": user.to_dict(),
+        "status_code": 201
+    }), 201
 
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.get_json() or {}
-    identifier = data.get("identifier", "").strip()  # username or email
-    password = data.get("password", "")
-    expected_role = data.get("role")  # optional role filter from frontend tab
+    identifier = str(data.get("identifier", "")).strip()
+    password = str(data.get("password", ""))
+    expected_role = data.get("role")
 
     if not identifier or not password:
-        return jsonify({"error": "Username/email and password are required."}), 400
+        return jsonify({"error": "Username/email and password are required.", "status_code": 400}), 400
 
     user = User.query.filter(
         (User.username == identifier) | (User.email == identifier.lower())
     ).first()
 
     if not user or not user.check_password(password):
-        return jsonify({"error": "Invalid credentials. Please check your username/email and password."}), 401
+        return jsonify({
+            "error": "Invalid credentials. Please check your username/email and password.",
+            "status_code": 401
+        }), 401
 
     if expected_role and user.role != expected_role:
-        return jsonify({"error": f"Account exists but is not an {expected_role} account."}), 403
+        return jsonify({
+            "error": f"Account exists but is not an {expected_role} account.",
+            "status_code": 403
+        }), 403
 
     session["user_id"] = user.id
     session["role"] = user.role
 
-    return jsonify({"message": "Login successful", "user": user.to_dict()})
+    return jsonify({
+        "message": "Login successful",
+        "user": user.to_dict(),
+        "status_code": 200
+    })
+
+
+@auth_bp.route("/demo-login", methods=["POST"])
+def demo_login():
+    data = request.get_json() or {}
+    role = data.get("role", "citizen")
+    if role not in ("citizen", "admin"):
+        return jsonify({"error": "Invalid demo role specified.", "status_code": 400}), 400
+
+    target_username = "admin" if role == "admin" else "citizen"
+    user = User.query.filter_by(username=target_username).first()
+    if not user:
+        user = User.query.filter_by(role=role).first()
+
+    if not user:
+        return jsonify({
+            "error": f"Demo {role} account not found in database. Run seed script.",
+            "status_code": 404
+        }), 404
+
+    session["user_id"] = user.id
+    session["role"] = user.role
+
+    return jsonify({
+        "message": f"Demo {role} login successful",
+        "user": user.to_dict(),
+        "status_code": 200
+    }), 200
 
 
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
     session.clear()
-    return jsonify({"message": "Logged out successfully"})
+    return jsonify({"message": "Logged out successfully", "status_code": 200})
 
 
 @auth_bp.route("/me", methods=["GET"])
@@ -100,4 +153,32 @@ def get_current_user():
         return jsonify({"user": None})
 
     return jsonify({"user": user.to_dict()})
+ 
+ 
+@auth_bp.route("/users", methods=["GET"])
+@require_role("admin")
+def list_users():
+    """
+    Admin-only endpoint listing registered users for municipal operations management.
+    Paginated to prevent unbounded result sets.
+    """
+    raw_page = request.args.get("page", 1)
+    raw_per_page = request.args.get("per_page", 50)
+    try:
+        page = max(1, int(raw_page))
+        per_page = min(200, max(1, int(raw_per_page)))
+    except (ValueError, TypeError):
+        page = 1
+        per_page = 50
 
+    pagination = User.query.order_by(User.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    return jsonify({
+        "users": [u.to_dict() for u in pagination.items],
+        "total": pagination.total,
+        "page": pagination.page,
+        "pages": pagination.pages,
+        "per_page": pagination.per_page,
+        "status_code": 200
+    }), 200
