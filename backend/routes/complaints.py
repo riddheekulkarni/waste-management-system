@@ -64,9 +64,17 @@ def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed
 
 
+def get_upload_limit():
+    if not current_app.config.get("RATELIMIT_ENABLED", True):
+        return "1000 per hour"
+    if not current_app.config.get("IS_PRODUCTION", False):
+        return "120 per hour"
+    return os.environ.get("RATELIMIT_UPLOAD", "30 per hour")
+
+
 @complaints_bp.route("/upload", methods=["POST"])
 @login_required
-@limiter.limit("10 per hour", error_message="Upload rate limit exceeded. Maximum 10 uploads per hour per IP.")
+@limiter.limit(get_upload_limit, error_message="Upload rate limit exceeded. Please try again later.")
 def upload_complaint():
     """
     Submits a new waste complaint for asynchronous AI processing.

@@ -22,6 +22,17 @@ def create_app():
     app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
     app.config.from_object(Config)
 
+    # Dynamic runtime override from environment (e.g. for pytest isolated in-memory testing)
+    _env_db = os.environ.get("DATABASE_URL")
+    if _env_db:
+        if _env_db.startswith("postgres://"):
+            _env_db = _env_db.replace("postgres://", "postgresql://", 1)
+        elif _env_db.startswith("sqlite:///"):
+            _db_p = _env_db[len("sqlite:///"):]
+            if not os.path.isabs(_db_p) and _db_p != ":memory:":
+                _env_db = "sqlite:///" + os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), _db_p)).replace("\\", "/")
+        app.config["SQLALCHEMY_DATABASE_URI"] = _env_db
+
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
     db.init_app(app)
@@ -31,13 +42,17 @@ def create_app():
         directory=os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations"),
     )
 
-    with app.app_context():
-        # In non-production testing or initial dev environments, create missing tables safely
-        if not app.config.get("IS_PRODUCTION"):
+    _is_testing = app.config.get("TESTING") or bool(os.environ.get("PYTEST_CURRENT_TEST"))
+    if not _is_testing and not app.config.get("IS_PRODUCTION"):
+        with app.app_context():
             try:
                 db.create_all()
+                from models import User
+                if not User.query.filter_by(username="citizen").first() or not User.query.filter_by(username="admin").first():
+                    from seed import seed_database
+                    seed_database(app)
             except Exception as e:
-                logger.info("db.create_all() schema notice: %s", e)
+                logger.info("db.create_all() / seed notice: %s", e)
 
     # ── Rate Limiter ───────────────────────────────────────────────────────
     limiter.enabled = app.config.get("RATELIMIT_ENABLED", True)
@@ -150,4 +165,12 @@ if __name__ == "__main__":
     import os as _os
     _debug = _os.environ.get("FLASK_ENV", "development").lower() != "production"
     _port = int(_os.environ.get("PORT", 5050))
-    app.run(debug=_debug, host="0.0.0.0", port=_port)
+    # 'stat' reloader avoids watchdog on Windows triggering spurious reloads on PyTorch site-packages access
+    _reloader_type = _os.environ.get("FLASK_RELOADER_TYPE", "stat")
+    app.run(
+        debug=_debug,
+        host="0.0.0.0",
+        port=_port,
+        reloader_type=_reloader_type,
+        exclude_patterns=["*site-packages*", "*uploads*", "*__pycache__*", "*.pt*"],
+    )

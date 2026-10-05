@@ -54,8 +54,14 @@ class Config:
     if _raw_db_url and _raw_db_url.startswith("postgres://"):
         _raw_db_url = _raw_db_url.replace("postgres://", "postgresql://", 1)
 
+    # Normalize relative SQLite paths so database resolution is consistent regardless of working directory
+    if _raw_db_url and _raw_db_url.startswith("sqlite:///"):
+        _db_path = _raw_db_url[len("sqlite:///"):]
+        if not os.path.isabs(_db_path) and _db_path != ":memory:":
+            _raw_db_url = "sqlite:///" + os.path.abspath(os.path.join(BASE_DIR, _db_path)).replace("\\", "/")
+
     SQLALCHEMY_DATABASE_URI = _raw_db_url or (
-        "sqlite:///" + os.path.join(BASE_DIR, "waste_management.db")
+        "sqlite:///" + os.path.join(BASE_DIR, "waste_management.db").replace("\\", "/")
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {

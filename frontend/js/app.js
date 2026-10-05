@@ -583,6 +583,7 @@ function setupWizard() {
     previewImg.src = "";
     previewContainer.classList.add("hidden");
     dropzoneContent.classList.remove("hidden");
+    dropzone.classList.remove("has-preview");
   });
 
   // Drag-and-drop
@@ -599,7 +600,12 @@ function setupWizard() {
   });
 
   function handleImageSelection(file) {
-    if (!file.type.startsWith("image/")) {
+    const validExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+    const ext = file.name ? ("." + file.name.split(".").pop().toLowerCase()) : "";
+    const isImageMime = file.type && file.type.startsWith("image/");
+    const isImageExt = validExtensions.includes(ext);
+
+    if (!isImageMime && !isImageExt) {
       showToast("Please upload an image file (JPG, PNG, or WEBP).", "error");
       return;
     }
@@ -615,6 +621,7 @@ function setupWizard() {
       previewImg.src = evt.target.result;
       dropzoneContent.classList.add("hidden");
       previewContainer.classList.remove("hidden");
+      dropzone.classList.add("has-preview");
     };
     reader.readAsDataURL(file);
   }
@@ -694,16 +701,44 @@ function resetWizard() {
   wizardState.category = "Garbage Accumulation";
   wizardState.imageFile = null;
   wizardState.imagePreviewSrc = "";
+  wizardState.landmark = "";
+  wizardState.details = "";
 
   document.querySelectorAll(".category-card").forEach((c, idx) => {
     c.classList.toggle("selected", idx === 0);
   });
 
+  const imageInput = document.getElementById("image-input");
+  if (imageInput) imageInput.value = "";
+
+  const dropzone = document.getElementById("dropzone");
+  if (dropzone) {
+    dropzone.classList.remove("has-preview");
+    dropzone.classList.remove("dragover");
+  }
+
   const previewContainer = document.getElementById("image-preview-container");
   const dropzoneContent = document.getElementById("dropzone-content");
+  const previewImg = document.getElementById("image-preview");
+  if (previewImg) previewImg.src = "";
   if (previewContainer && dropzoneContent) {
     previewContainer.classList.add("hidden");
     dropzoneContent.classList.remove("hidden");
+  }
+
+  const landmarkInput = document.getElementById("landmark-input");
+  if (landmarkInput) landmarkInput.value = "";
+
+  const detailsInput = document.getElementById("details-input");
+  if (detailsInput) detailsInput.value = "";
+
+  const revPhoto = document.getElementById("rev-photo-thumb");
+  if (revPhoto) revPhoto.src = "";
+
+  const submitBtn = document.getElementById("submit-btn");
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = `🚀 Submit Report to Municipal Team`;
   }
 
   const uploadResult = document.getElementById("upload-result");
@@ -952,6 +987,17 @@ function renderLiveTimeline(data) {
 
 function startRealtimeSSE(complaintData) {
   const ticketId = complaintData.ticket_id;
+
+  // If already processed synchronously, render final outcome immediately
+  if (complaintData.status && !["AI_PROCESSING", "Open"].includes(complaintData.status)) {
+    if (complaintData.status === "PROCESSING_FAILED") {
+      showFinalFailure(complaintData.processing_error);
+    } else {
+      showFinalSuccess(complaintData);
+    }
+    return;
+  }
+
   let eventSource = null;
   let fallbackTimer = null;
   let isClosed = false;
@@ -1047,6 +1093,12 @@ function startRealtimeSSE(complaintData) {
       `;
     }
 
+    const submitBtn = document.getElementById("submit-btn");
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `🚀 Submit Report to Municipal Team`;
+    }
+
     showToast(`Ticket #${ticketId} verified successfully!`, "success");
   };
 
@@ -1055,6 +1107,12 @@ function startRealtimeSSE(complaintData) {
     setStepState("tl-step-completed", "failed");
     const finalDesc = document.getElementById("tl-final-desc");
     if (finalDesc) finalDesc.textContent = errorMsg || "AI processing could not be completed.";
+
+    const submitBtn = document.getElementById("submit-btn");
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `🚀 Submit Report to Municipal Team`;
+    }
 
     const resultBox = document.getElementById("tl-result-box");
     if (resultBox) {
