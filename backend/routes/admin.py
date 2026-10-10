@@ -1,4 +1,6 @@
+import csv
 from datetime import datetime, timedelta
+import math
 import os
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import func, text
@@ -174,6 +176,112 @@ def department_metrics():
         "departments": metrics,
         "status_code": 200,
     }), 200
+
+
+@admin_bp.route("/model-analytics", methods=["GET"])
+@require_role("admin")
+def admin_model_analytics():
+    """Return only metrics exported from the configured YOLO training run."""
+    metrics_dir = current_app.config["YOLO_METRICS_DIR"]
+    results_path = os.path.join(metrics_dir, "results.csv")
+    confusion_path = os.path.join(metrics_dir, "confusion_matrix.csv")
+    response = {
+        "metrics": None,
+        "confusion_matrix": None,
+        "missing": [],
+    }
+
+    if os.path.isfile(results_path):
+        required_columns = (
+            "epoch",
+            "metrics/mAP50(B)",
+            "metrics/mAP50-95(B)",
+            "metrics/precision(B)",
+            "metrics/recall(B)",
+            "train/box_loss",
+            "train/cls_loss",
+            "train/dfl_loss",
+            "val/box_loss",
+            "val/cls_loss",
+            "val/dfl_loss",
+        )
+        try:
+            with open(results_path, newline="", encoding="utf-8-sig") as results_file:
+                reader = csv.DictReader(results_file)
+                missing_columns = [column for column in required_columns if column not in (reader.fieldnames or [])]
+                if missing_columns:
+                    raise ValueError("results.csv is missing required YOLO columns: " + ", ".join(missing_columns))
+
+                rows = list(reader)
+            if not rows:
+                raise ValueError("results.csv contains no epoch data.")
+
+            def metric_value(row, column):
+                raw_value = row.get(column)
+                if raw_value is None:
+                    raise ValueError(f"results.csv contains a missing value in {column}.")
+                value = float(raw_value.strip())
+                if not math.isfinite(value):
+                    raise ValueError(f"results.csv contains a non-finite value in {column}.")
+                return value
+
+            epochs = [int(metric_value(row, "epoch")) + 1 for row in rows]
+            train_losses = [
+                sum(metric_value(row, f"train/{loss}_loss") for loss in ("box", "cls", "dfl"))
+                for row in rows
+            ]
+            val_losses = [
+                sum(metric_value(row, f"val/{loss}_loss") for loss in ("box", "cls", "dfl"))
+                for row in rows
+            ]
+            initial_loss = train_losses[0]
+            response["metrics"] = {
+                "epochs": epochs,
+                "map50": [metric_value(row, "metrics/mAP50(B)") for row in rows],
+                "map50_95": [metric_value(row, "metrics/mAP50-95(B)") for row in rows],
+                "precision": [metric_value(row, "metrics/precision(B)") for row in rows],
+                "recall": [metric_value(row, "metrics/recall(B)") for row in rows],
+                "train_loss": train_losses,
+                "val_loss": val_losses,
+                "loss_reduction_percent": [
+                    (initial_loss - loss) / initial_loss * 100 if initial_loss else None
+                    for loss in train_losses
+                ],
+            }
+        except (OSError, csv.Error, ValueError) as exc:
+            return jsonify({"error": f"Could not read YOLO training history: {exc}"}), 422
+    else:
+        response["missing"].append("results.csv")
+
+    if os.path.isfile(confusion_path):
+        try:
+            with open(confusion_path, newline="", encoding="utf-8-sig") as matrix_file:
+                reader = csv.reader(matrix_file)
+                header = next(reader, [])
+                labels = header[1:]
+                matrix_rows = list(reader)
+            if not labels or len(matrix_rows) != len(labels):
+                raise ValueError("confusion_matrix.csv must contain a square matrix with row and column labels.")
+
+            matrix_labels = []
+            matrix = []
+            for row in matrix_rows:
+                if len(row) != len(labels) + 1:
+                    raise ValueError("confusion_matrix.csv has inconsistent row lengths.")
+                matrix_labels.append(row[0])
+                values = [float(value) for value in row[1:]]
+                if not all(math.isfinite(value) for value in values):
+                    raise ValueError("confusion_matrix.csv contains non-finite values.")
+                matrix.append(values)
+            if matrix_labels != labels:
+                raise ValueError("confusion_matrix.csv row and column labels do not match.")
+            response["confusion_matrix"] = {"labels": labels, "values": matrix}
+        except (OSError, csv.Error, ValueError, StopIteration) as exc:
+            return jsonify({"error": f"Could not read YOLO evaluation matrix: {exc}"}), 422
+    else:
+        response["missing"].append("confusion_matrix.csv")
+
+    return jsonify(response), 200
 
 
 @admin_bp.route("/analytics", methods=["GET"])
@@ -923,4 +1031,3 @@ def admin_notifications_read_all():
         "unread_count": 0,
         "status_code": 200,
     }), 200
-

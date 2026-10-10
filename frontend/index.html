@@ -1096,6 +1096,39 @@
               </div>
             </div>
           </div>
+
+          <section class="yolo-analytics" aria-labelledby="yolo-analytics-heading">
+            <h3 id="yolo-analytics-heading">YOLOv8 Model Training & Evaluation</h3>
+            <p class="yolo-analytics-description">Training and validation charts use the exported YOLOv8 run history. The confusion matrix uses the matrix produced by model validation.</p>
+            <p id="yolo-model-metrics-empty" class="yolo-analytics-empty" role="status" hidden></p>
+            <div id="yolo-model-charts" class="charts-grid" hidden>
+              <div class="chart-card">
+                <h3>mAP@50 and mAP@50–95 vs Epochs</h3>
+                <div class="chart-container"><canvas id="yolo-chart-accuracy"></canvas></div>
+              </div>
+              <div class="chart-card">
+                <h3>Precision and Recall vs Epochs</h3>
+                <div class="chart-container"><canvas id="yolo-chart-precision-recall"></canvas></div>
+              </div>
+              <div class="chart-card">
+                <h3>Training Loss vs Epochs</h3>
+                <div class="chart-container"><canvas id="yolo-chart-training-loss"></canvas></div>
+              </div>
+              <div class="chart-card">
+                <h3>Validation Loss vs Epochs</h3>
+                <div class="chart-container"><canvas id="yolo-chart-validation-loss"></canvas></div>
+              </div>
+              <div class="chart-card">
+                <h3>Training Loss Reduction vs Epochs</h3>
+                <div class="chart-container"><canvas id="yolo-chart-loss-reduction"></canvas></div>
+              </div>
+            </div>
+            <div class="chart-card yolo-confusion-card">
+              <h3>YOLOv8 Confusion Matrix</h3>
+              <p id="yolo-confusion-empty" class="yolo-analytics-empty" role="status" hidden></p>
+              <div id="yolo-confusion-matrix" class="confusion-matrix-container" hidden></div>
+            </div>
+          </section>
         </div>
 
         <!-- 7. USERS MANAGEMENT VIEW PANE -->

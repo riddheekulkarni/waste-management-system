@@ -1502,6 +1502,58 @@ body.theme-light .civic-card:hover {
   height: 240px;
 }
 
+.yolo-analytics {
+  margin-top: 2.5rem;
+}
+
+.yolo-analytics > h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.35rem;
+}
+
+.yolo-analytics-description,
+.yolo-analytics-empty {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.yolo-analytics-empty {
+  padding: 1rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.yolo-confusion-card {
+  margin-bottom: 2rem;
+  overflow-x: auto;
+}
+
+.confusion-matrix-container {
+  overflow-x: auto;
+}
+
+.confusion-matrix {
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  min-width: 100%;
+  text-align: center;
+}
+
+.confusion-matrix th,
+.confusion-matrix td {
+  border: 1px solid var(--border-color);
+  min-width: 3rem;
+  padding: 0.45rem;
+}
+
+.confusion-matrix th {
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
 .admin-map-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -2432,4 +2484,3 @@ body.theme-light .admin-badge {
     grid-template-columns: 1fr !important;
   }
 }
-

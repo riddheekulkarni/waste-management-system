@@ -1664,6 +1664,7 @@ let chartTimeline = null;
 let chartSeverity = null;
 let chartDepartment = null;
 let chartOutcomes = null;
+let yoloCharts = [];
 
 function setupAdminDashboard() {
   // Navigation tabs within Admin Center
@@ -2955,9 +2956,122 @@ async function loadAdminAnalytics() {
       });
     }
 
+    await loadYoloModelAnalytics();
+
   } catch (err) {
     console.error("Error loading admin analytics:", err);
   }
+}
+
+async function loadYoloModelAnalytics() {
+  const metricsEmpty = document.getElementById("yolo-model-metrics-empty");
+  const chartsGrid = document.getElementById("yolo-model-charts");
+  const confusionEmpty = document.getElementById("yolo-confusion-empty");
+  const confusionContainer = document.getElementById("yolo-confusion-matrix");
+  if (!metricsEmpty || !chartsGrid || !confusionEmpty || !confusionContainer) return;
+
+  yoloCharts.forEach(chart => chart.destroy());
+  yoloCharts = [];
+  confusionContainer.replaceChildren();
+  chartsGrid.hidden = true;
+  confusionContainer.hidden = true;
+  metricsEmpty.hidden = true;
+  confusionEmpty.hidden = true;
+
+  try {
+    const response = await fetch(`${API}/admin/model-analytics`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not load YOLO model analytics.");
+
+    if (data.metrics) {
+      const metrics = data.metrics;
+      const labels = metrics.epochs.map(epoch => `Epoch ${epoch}`);
+      chartsGrid.hidden = false;
+      const lineOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        scales: { y: { beginAtZero: true } }
+      };
+      const addLineChart = (id, datasets, options = lineOptions) => {
+        const canvas = document.getElementById(id);
+        if (canvas) yoloCharts.push(new Chart(canvas, { type: "line", data: { labels, datasets }, options }));
+      };
+
+      addLineChart("yolo-chart-accuracy", [
+        { label: "mAP@50", data: metrics.map50, borderColor: "#10b981", tension: 0.25 },
+        { label: "mAP@50–95", data: metrics.map50_95, borderColor: "#38bdf8", tension: 0.25 }
+      ]);
+      addLineChart("yolo-chart-precision-recall", [
+        { label: "Precision", data: metrics.precision, borderColor: "#a78bfa", tension: 0.25 },
+        { label: "Recall", data: metrics.recall, borderColor: "#f59e0b", tension: 0.25 }
+      ]);
+      addLineChart("yolo-chart-training-loss", [
+        { label: "Training loss (box + cls + dfl)", data: metrics.train_loss, borderColor: "#ef4444", tension: 0.25 }
+      ], { ...lineOptions, scales: { y: { beginAtZero: true } } });
+      addLineChart("yolo-chart-validation-loss", [
+        { label: "Validation loss (box + cls + dfl)", data: metrics.val_loss, borderColor: "#f97316", tension: 0.25 }
+      ]);
+      addLineChart("yolo-chart-loss-reduction", [
+        { label: "Loss reduction from epoch 1 (%)", data: metrics.loss_reduction_percent, borderColor: "#06b6d4", tension: 0.25 }
+      ], { ...lineOptions, scales: { y: { title: { display: true, text: "Reduction (%)" } } } });
+    } else {
+      metricsEmpty.textContent = "Training history is unavailable. Run the YOLOv8 training notebook, then place its exported results.csv in the configured YOLO metrics directory.";
+      metricsEmpty.hidden = false;
+    }
+
+    if (data.confusion_matrix) {
+      renderYoloConfusionMatrix(confusionContainer, data.confusion_matrix);
+      confusionContainer.hidden = false;
+    } else {
+      confusionEmpty.textContent = "Evaluation confusion matrix is unavailable. Run model validation from the notebook and place its exported confusion_matrix.csv in the configured YOLO metrics directory.";
+      confusionEmpty.hidden = false;
+    }
+  } catch (err) {
+    metricsEmpty.textContent = err.message || "Could not load YOLO model analytics.";
+    metricsEmpty.hidden = false;
+    confusionEmpty.textContent = err.message || "Could not load YOLO evaluation matrix.";
+    confusionEmpty.hidden = false;
+    console.error("Error loading YOLO model analytics:", err);
+  }
+}
+
+function renderYoloConfusionMatrix(container, confusionMatrix) {
+  const table = document.createElement("table");
+  table.className = "confusion-matrix";
+  table.setAttribute("aria-label", "YOLOv8 actual versus predicted class counts");
+  const header = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  const corner = document.createElement("th");
+  corner.textContent = "Actual \\ Predicted";
+  headerRow.appendChild(corner);
+  confusionMatrix.labels.forEach(label => {
+    const cell = document.createElement("th");
+    cell.scope = "col";
+    cell.textContent = label;
+    headerRow.appendChild(cell);
+  });
+  header.appendChild(headerRow);
+  table.appendChild(header);
+
+  const body = document.createElement("tbody");
+  confusionMatrix.values.forEach((row, rowIndex) => {
+    const tr = document.createElement("tr");
+    const label = document.createElement("th");
+    label.scope = "row";
+    label.textContent = confusionMatrix.labels[rowIndex];
+    tr.appendChild(label);
+    const rowMax = Math.max(...row, 0);
+    row.forEach(value => {
+      const cell = document.createElement("td");
+      cell.textContent = String(value);
+      if (rowMax > 0) cell.style.backgroundColor = `rgba(16, 185, 129, ${0.12 + 0.68 * value / rowMax})`;
+      tr.appendChild(cell);
+    });
+    body.appendChild(tr);
+  });
+  table.appendChild(body);
+  container.replaceChildren(table);
 }
 
 // ── 8. Users Management ─────────────────────────────────────────────────────

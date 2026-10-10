@@ -82,6 +82,9 @@ class Config:
         os.path.join(PROJECT_ROOT, "models", "best.pt"),
     ]
     WASTE_MODEL_WEIGHTS = next((w for w in _candidate_weights if w and os.path.exists(w)), None)
+    YOLO_METRICS_DIR = os.environ.get("YOLO_METRICS_DIR") or os.path.join(
+        PROJECT_ROOT, "runs", "waste_yolov8s"
+    )
 
     _candidate_pothole_weights = [
         os.environ.get("POTHOLE_MODEL_WEIGHTS"),
