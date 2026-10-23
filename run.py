@@ -13,16 +13,33 @@ if BACKEND_DIR not in sys.path:
 
 from app import create_app
 
+import argparse
+
 app = create_app()
 
 if __name__ == "__main__":
-    _debug = os.environ.get("FLASK_ENV", "development").lower() != "production"
-    _port = int(os.environ.get("PORT", 5050))
-    _reloader_type = os.environ.get("FLASK_RELOADER_TYPE", "stat")
+    parser = argparse.ArgumentParser(description="EcoClean Civic Platform Application Server")
+    parser.add_argument("--host", default=os.environ.get("HOST", "0.0.0.0"), help="Host IP to bind (default: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 5050)), help="Port number to listen on (default: 5050)")
+    parser.add_argument("--no-debug", dest="debug", action="store_false", help="Disable Flask debug mode")
+    parser.set_defaults(debug=os.environ.get("FLASK_ENV", "development").lower() != "production")
+    args = parser.parse_args()
+
+    reloader_type = os.environ.get("FLASK_RELOADER_TYPE", "stat")
+    display_host = "localhost" if args.host == "0.0.0.0" else args.host
+
+    print("=" * 60)
+    print("  🌱 EcoClean Civic Platform Launcher")
+    print(f"  Serving at:   http://{display_host}:{args.port}")
+    print(f"  Health probe: http://{display_host}:{args.port}/api/health")
+    print(f"  Debug mode:   {'Enabled' if args.debug else 'Disabled'}")
+    print("=" * 60)
+
     app.run(
-        debug=_debug,
-        host="0.0.0.0",
-        port=_port,
-        reloader_type=_reloader_type,
+        debug=args.debug,
+        host=args.host,
+        port=args.port,
+        reloader_type=reloader_type,
         exclude_patterns=["*site-packages*", "*uploads*", "*__pycache__*", "*.pt*"],
     )
+

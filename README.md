@@ -26,7 +26,7 @@
 [![YOLOv8](https://img.shields.io/badge/YOLOv8-Ultralytics-FF5733?style=for-the-badge)](https://ultralytics.com)
 [![Redis](https://img.shields.io/badge/Redis-RQ-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
-[![Tests](https://img.shields.io/badge/Tests-115%20passing-22C55E?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org)
+[![Tests](https://img.shields.io/badge/Tests-119%20passing-22C55E?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org)
 
 </div>
 
@@ -92,7 +92,7 @@ EcoClean Civic turns a citizen photo of illegal waste dumping into a **fully tra
 | Citizen feedback loop (CONFIRMED / NEEDS ATTENTION) | ✅ |
 | Admin feedback queue + operational metrics | ✅ |
 | Docker + Gunicorn production stack | ✅ |
-| 115 automated tests (pytest) | ✅ |
+| 119 automated tests (pytest) | ✅ |
 | Rate limiting (Flask-Limiter) | ✅ |
 | Security headers (X-Frame, X-Content-Type, HSTS) | ✅ |
 
@@ -104,9 +104,10 @@ EcoClean Civic turns a citizen photo of illegal waste dumping into a **fully tra
 
 ```bash
 git clone https://github.com/riddheekulkarni/waste-management-system.git
-cd waste-management-system/backend
-pip install -r requirements.txt
-python app.py
+cd waste-management-system
+pip install -r backend/requirements.txt
+python run.py
+# Or with custom options: python run.py --port 5050 --host 0.0.0.0
 ```
 
 Open → **http://localhost:5050**
@@ -139,7 +140,7 @@ flask db upgrade
 
 ```bash
 pytest -q
-# 115 passed
+# 119 passed
 ```
 
 ---
@@ -252,6 +253,7 @@ For deeper architecture analysis, bounding box normalization, and sweep-line sev
 | `GET` | `/api/admin/notifications` | 🛡️ | Operational alerts |
 | `PATCH` | `/api/admin/notifications/<id>/read` | 🛡️ | Mark alert read |
 | `POST` | `/api/admin/notifications/read-all` | 🛡️ | Mark all alerts read |
+| `GET` | `/api/health` | — | System health check probe (Docker / K8s) |
 
 ### Images
 
@@ -274,7 +276,7 @@ For deeper architecture analysis, bounding box normalization, and sweep-line sev
 | **Geospatial** | Haversine distance · Leaflet.js |
 | **Rate Limiting** | Flask-Limiter |
 | **Production** | Docker · Gunicorn · Docker Compose |
-| **Testing** | pytest · Flask test client — 115 tests |
+| **Testing** | pytest · Flask test client — 119 tests |
 | **Frontend** | Vanilla HTML/CSS/JS · Chart.js · Leaflet |
 
 ---
@@ -309,7 +311,7 @@ waste-management-system/
 │   │   ├── admin.py        # /api/admin/*
 │   │   ├── analytics.py    # /api/analytics/*
 │   │   └── notifications.py # /api/notifications/*
-│   └── tests/              # 115 pytest tests (Phases 1–8)
+│   └── tests/              # 119 pytest tests (Phases 1–8)
 │
 ├── frontend/
 │   ├── index.html          # SPA — citizen + admin views

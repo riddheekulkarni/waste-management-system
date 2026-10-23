@@ -401,11 +401,16 @@ Then open:
 http://localhost:5050
 ```
 
-### Running tests
-
+### Running the App from Root
 ```bash
-cd backend
-pytest tests
+python run.py
+# Or with options: python run.py --port 5050 --host 0.0.0.0
+```
+
+### Running tests
+```bash
+pytest backend/tests
+# 119 automated tests covering auth, async processing, SSE, admin ops, civic intelligence, and field ops
 ```
 
 ## Docker Setup
