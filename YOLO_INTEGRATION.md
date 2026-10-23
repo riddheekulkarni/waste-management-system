@@ -447,3 +447,18 @@ POST /api/complaints/upload
 | **Annotated image saved at detection time** | Frontend can serve the bounding-box overlay immediately without post-processing latency |
 | **Idempotent job design** | Worker crash + retry is safe — old DetectionItem rows are deleted before re-inserting |
 | **300s idempotency window** | Prevents two workers processing the same job concurrently after a crash recovery |
+
+---
+
+## 11. Model Evaluation Assets & Training Benchmarks
+
+The model was fine-tuned for 100 epochs using AdamW on an NVIDIA T4 GPU. Pre-generated visual evaluation assets and raw metrics can be found in [`report_assets/`](report_assets/README.md):
+
+- **Loss Curves**: [`report_assets/01_train_val_loss.png`](report_assets/01_train_val_loss.png) (Box, Class, and DFL training/validation loss)
+- **Accuracy Dynamics**: [`report_assets/02_accuracy_metrics.png`](report_assets/02_accuracy_metrics.png) (Precision, Recall, mAP@50, mAP@50-95)
+- **Training Dashboard**: [`report_assets/03_training_dashboard.png`](report_assets/03_training_dashboard.png) (Comprehensive training telemetry)
+- **Per-Class Breakdown**: [`report_assets/04_per_class_map50.png`](report_assets/04_per_class_map50.png) (Hazardous 0.880, Plastic 0.810, Can 0.790, Cardboard 0.760, Glass 0.730, Paper 0.710, Organic 0.690, Polythene 0.660, Mixed 0.580)
+- **Confusion Matrix**: [`report_assets/05_confusion_matrix.png`](report_assets/05_confusion_matrix.png) (Normalized multi-class validation matrix)
+- **PR Curves**: [`report_assets/06_pr_curve.png`](report_assets/06_pr_curve.png) (Precision-Recall curves with per-class AUC scores)
+- **Metrics Table**: [`report_assets/07_metrics_summary_table.png`](report_assets/07_metrics_summary_table.png) (Consolidated table for reporting)
+

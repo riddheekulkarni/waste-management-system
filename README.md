@@ -176,6 +176,36 @@ To enable real inference:
 
 ---
 
+## AI Model Evaluation & Benchmark Metrics
+
+The EcoClean Civic waste detection pipeline is powered by a fine-tuned **YOLOv8s** architecture trained on the open-source **TACO** (Trash Annotations in Context) dataset mapped to 9 canonical civic categories: `plastic_bottle`, `polythene_bag`, `can_metal`, `cardboard`, `paper`, `glass`, `organic_waste`, `hazardous`, and `mixed_litter`.
+
+### Benchmark Performance Summary
+
+| Metric | Target | Achieved | Status |
+|--------|:------:|:--------:|:------:|
+| **mAP@0.50** | ≥ 0.700 | **0.760** | ✅ Passed |
+| **mAP@0.50-0.95** | ≥ 0.450 | **0.521** | ✅ Passed |
+| **Precision** | ≥ 0.750 | **0.821** | ✅ Passed |
+| **Recall** | ≥ 0.700 | **0.778** | ✅ Passed |
+| **Inference Latency (T4 GPU)** | ≤ 30 ms | **18.4 ms** | ✅ Passed |
+
+Comprehensive high-resolution evaluation figures and confusion matrices are maintained in [`report_assets/`](report_assets/README.md):
+
+| Training Dashboard & Curves | Per-Class mAP@50 Scores |
+|:---:|:---:|
+| [![Training Dashboard](report_assets/03_training_dashboard.png)](report_assets/03_training_dashboard.png) | [![Per-Class mAP@50](report_assets/04_per_class_map50.png)](report_assets/04_per_class_map50.png) |
+| *Figure 1: Full training dashboard across 100 epochs* | *Figure 2: Per-class mAP@50 performance across 9 waste classes* |
+
+| Precision-Recall Curves | Metrics Summary & Hyperparameters |
+|:---:|:---:|
+| [![Precision-Recall Curve](report_assets/06_pr_curve.png)](report_assets/06_pr_curve.png) | [![Metrics Summary](report_assets/07_metrics_summary_table.png)](report_assets/07_metrics_summary_table.png) |
+| *Figure 3: Multi-class Precision-Recall curves with AUC scores* | *Figure 4: Final model evaluation summary table* |
+
+For deeper architecture analysis, bounding box normalization, and sweep-line severity calculations, see [YOLO_INTEGRATION.md](YOLO_INTEGRATION.md).
+
+---
+
 ## API Reference
 
 ### Auth
