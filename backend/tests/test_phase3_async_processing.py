@@ -144,7 +144,7 @@ def test_background_job_pipeline_success(app):
         success = process_complaint_job("pipe0001", app=app)
         assert success is True
 
-        refreshed = Complaint.query.get("pipe0001")
+        refreshed = db.session.get(Complaint, "pipe0001")
         assert refreshed.status == STATUS_VERIFIED
         assert refreshed.processing_status == STAGE_COMPLETED
         assert refreshed.severity_level in ("Low", "Medium", "High")
@@ -204,7 +204,7 @@ def test_duplicate_detection_in_background_job(app):
         success = process_complaint_job("child001", app=app)
         assert success is True
 
-        refreshed_child = Complaint.query.get("child001")
+        refreshed_child = db.session.get(Complaint, "child001")
         assert refreshed_child.status == STATUS_DUPLICATE
         assert refreshed_child.is_duplicate is True
         assert refreshed_child.duplicate_of_id == "parent01"
@@ -232,7 +232,7 @@ def test_failure_handling_sets_processing_failed(app):
         success = process_complaint_job("fail0001", app=app)
         assert success is False
 
-        refreshed = Complaint.query.get("fail0001")
+        refreshed = db.session.get(Complaint, "fail0001")
         assert refreshed.status == STATUS_PROCESSING_FAILED
         assert refreshed.processing_status == STAGE_FAILED
         assert refreshed.processing_error is not None
@@ -309,7 +309,7 @@ def test_retry_does_not_duplicate_detection_items(app):
         assert count_1 > 0
 
         # Simulate retry: Reset status and run 2
-        complaint = Complaint.query.get("idem0001")
+        complaint = db.session.get(Complaint, "idem0001")
         complaint.status = STATUS_AI_PROCESSING
         complaint.processing_status = STAGE_QUEUED
         db.session.commit()
@@ -422,7 +422,7 @@ def test_ai_provenance_preservation(app):
 
         # In standard test environment, WasteDetector operates according to config
         process_complaint_job("prov0001", app=app)
-        refreshed = Complaint.query.get("prov0001")
+        refreshed = db.session.get(Complaint, "prov0001")
 
         assert refreshed.ai_mode in (AI_MODE_REAL_YOLO, AI_MODE_MOCK_DEMO)
         assert refreshed.model_name in ("YOLOv8", "SyntheticMock")
