@@ -1,0 +1,22 @@
+# Git & Version Control
+.git/
+.gitignore
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.log
+
+# Development databases and local state
+*.db
+*.sqlite3
+instance/
+waste_management.db
+
+# Secrets & Local Environment Configs
+.env
+.env.*
+
+# Local model weights (mounted via volume)
+*.pt

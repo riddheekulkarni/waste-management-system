@@ -1,0 +1,61 @@
+# Git & Version Control
+.git/
+.gitignore
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Development databases and local state
+*.db
+*.sqlite3
+instance/
+backend/instance/
+backend/waste_management.db
+
+# Secrets & Local Environment Configs
+.env
+.env.*
+!.env.example
+
+# Large model weight checkpoints (mounted via Docker volume /models, not baked into base layer)
+*.pt
+*.onnx
+best.pt
+pothole_model.pt
+
+# Documentation, Notebooks, and Report Assets (not needed inside container runtime)
+*.ipynb
+report_assets/
+ARCHITECTURE_UPGRADE_PLAN.md
+ASYNC_PROCESSING.md
+CITIZEN_UX.md
+CIVIC_INTELLIGENCE.md
+FIELD_OPERATIONS.md
+MIGRATIONS.md
+MUNICIPAL_OPERATIONS.md
+PROJECT_DOCUMENTATION.md
+REALTIME_UPDATES.md
+STORAGE_STRUCTURE.md
+YOLO_INTEGRATION.md
+future_scope_roadmap.md
+README.md
+
+# IDE & Editor files
+.vscode/
+.idea/
+.kilo/
+*.swp
+*.swo
