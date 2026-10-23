@@ -124,3 +124,17 @@ def test_admin_rbac_and_status_update(client):
     res_geo = client.get("/api/analytics/geo")
     assert res_geo.status_code == 200
     assert "points" in res_geo.get_json()
+
+
+def test_health_check_endpoints(client):
+    for endpoint in ("/health", "/api/health"):
+        res = client.get(endpoint)
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data["status"] == "ok"
+        assert data["database"] == "connected"
+        assert "timestamp" in data
+        assert "environment" in data
+        assert "service" in data
+        assert "async_mode" in data
+        assert "ai_mode" in data

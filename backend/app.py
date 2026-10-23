@@ -2,7 +2,9 @@ import logging
 import math
 import os
 
+from datetime import datetime, timezone
 from flask import Flask, jsonify, request, send_from_directory, session
+from sqlalchemy import text
 
 from config import Config
 from extensions import limiter, migrate
@@ -105,6 +107,33 @@ def create_app():
             "⚠️  WasteDetector: MOCK mode (no valid WASTE_MODEL_WEIGHTS). "
             "Set WASTE_MODEL_WEIGHTS=/path/to/best.pt to enable real inference."
         )
+
+    @app.route("/health")
+    @app.route("/api/health")
+    def health_check():
+        db_status = "connected"
+        overall_status = "ok"
+        status_code = 200
+        try:
+            db.session.execute(text("SELECT 1")).scalar()
+        except Exception as e:
+            logger.warning("Healthcheck DB probe failed: %s", e)
+            db_status = f"unreachable: {str(e)}"
+            overall_status = "degraded"
+            status_code = 503
+
+        weights = app.config.get("WASTE_MODEL_WEIGHTS") or ""
+        yolo_mode = "REAL_YOLO" if weights and os.path.exists(weights) else "MOCK_DEMO"
+
+        return jsonify({
+            "status": overall_status,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "service": "EcoClean Civic Backend",
+            "environment": app.config.get("FLASK_ENV", "development"),
+            "database": db_status,
+            "async_mode": app.config.get("ASYNC_MODE", "sync"),
+            "ai_mode": yolo_mode
+        }), status_code
 
     @app.route("/")
     def index():
