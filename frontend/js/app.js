@@ -47,6 +47,7 @@ function showToast(message, type = "info", duration = 3500) {
   const icons = { success: "✅", error: "❌", info: "ℹ️" };
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;
+  toast.setAttribute("role", type === "error" ? "alert" : "status");
   toast.innerHTML = `<span>${icons[type] || "ℹ️"}</span><span>${message}</span>`;
   container.appendChild(toast);
 
