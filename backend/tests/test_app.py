@@ -1,5 +1,6 @@
 import io
 import json
+from unittest.mock import patch
 from PIL import Image
 
 
@@ -138,3 +139,27 @@ def test_health_check_endpoints(client):
         assert "service" in data
         assert "async_mode" in data
         assert "ai_mode" in data
+
+
+def test_security_headers_present(client):
+    res = client.get("/api/health")
+    assert res.headers.get("X-Content-Type-Options") == "nosniff"
+    assert res.headers.get("X-Frame-Options") == "SAMEORIGIN"
+    assert res.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+
+
+def test_api_404_json_error(client):
+    res = client.get("/api/non_existent_civic_route")
+    assert res.status_code == 404
+    data = res.get_json()
+    assert "error" in data
+    assert data["status_code"] == 404
+
+
+def test_health_degraded_on_db_failure(client):
+    with patch("models.db.session.execute", side_effect=Exception("Database connection timeout")):
+        res = client.get("/api/health")
+        assert res.status_code == 503
+        data = res.get_json()
+        assert data["status"] == "degraded"
+        assert "unreachable" in data["database"]
